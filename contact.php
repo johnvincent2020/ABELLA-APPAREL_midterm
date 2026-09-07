@@ -35,111 +35,155 @@ if (isset($_SESSION['cart'])) {
 
 
 /* =========================================
-   CONTACT FORM
+   MESSAGING SYSTEM
 ========================================= */
 
 $formMessage = '';
 $formSuccess = false;
-
-// Values used to re-fill the fields ONLY when there's a validation error.
-// On success we redirect (Post/Redirect/Get), so the fields start empty.
-$postName    = '';
-$postEmail   = '';
-$postSubject = '';
 $postMessage = '';
 
-/*
- * If we just redirected here after a successful submit,
- * pick up the flash message from the session and show it once.
- */
+$messages = [];
+
+
+/* =========================================
+   SUCCESS MESSAGE
+========================================= */
+
 if (isset($_SESSION['contact_success'])) {
 
     $formSuccess = true;
 
     $formMessage =
-        'Thank you, ' .
-        htmlspecialchars($_SESSION['contact_success']) .
-        '. Your message has been received.';
+        'Thank you for messaging us. Your message has been received.';
 
     unset($_SESSION['contact_success']);
 
 }
 
+
+/* =========================================
+   SEND CUSTOMER MESSAGE
+========================================= */
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
-    $name = trim($_POST['name'] ?? '');
-    $email = trim($_POST['email'] ?? '');
-    $subject = trim($_POST['subject'] ?? '');
-    $message = trim($_POST['message'] ?? '');
+    if (!$isUser || !isset($_SESSION['user_id'])) {
 
-    if (
-        empty($name) ||
-        empty($email) ||
-        empty($subject) ||
-        empty($message)
-    ) {
-
-        $formMessage = 'Please fill in all fields.';
-
-        // Keep what the user typed so they don't lose it on an error.
-        $postName = $name;
-        $postEmail = $email;
-        $postSubject = $subject;
-        $postMessage = $message;
-
-    } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-
-        $formMessage = 'Please enter a valid email address.';
-
-        $postName = $name;
-        $postEmail = $email;
-        $postSubject = $subject;
-        $postMessage = $message;
-} else {
-
-    /* =========================================
-       SAVE CONTACT MESSAGE
-    ========================================= */
-
-    $stmt = $conn->prepare("
-        INSERT INTO contact_messages
-        (name, email, subject, message)
-        VALUES (?, ?, ?, ?)
-    ");
-
-    $stmt->bind_param(
-        "ssss",
-        $name,
-        $email,
-        $subject,
-        $message
-    );
-
-    if ($stmt->execute()) {
-
-        $_SESSION['contact_success'] = $name;
-
-        $stmt->close();
-
-        header('Location: contact.php#contact-form-wrapper');
-        exit;
+        $formMessage = 'Please log in to send a message.';
 
     } else {
 
-        $formMessage = 'Sorry, your message could not be sent. Please try again.';
+        $userId = (int) $_SESSION['user_id'];
 
-        $postName = $name;
-        $postEmail = $email;
-        $postSubject = $subject;
+        $message = trim($_POST['message'] ?? '');
+
         $postMessage = $message;
 
-        $stmt->close();
+
+        if (empty($message)) {
+
+            $formMessage = 'Please enter your message.';
+
+        } else {
+
+            $stmt = $conn->prepare("
+                INSERT INTO messages
+                (user_id, sender, message, is_read)
+                VALUES (?, 'customer', ?, 0)
+            ");
+
+
+            if ($stmt) {
+
+                $stmt->bind_param(
+                    "is",
+                    $userId,
+                    $message
+                );
+
+
+                if ($stmt->execute()) {
+
+                    $_SESSION['contact_success'] = true;
+
+                    $stmt->close();
+
+                    header('Location: contact.php#contact-form-wrapper');
+
+                    exit;
+
+                } else {
+
+                    $formMessage =
+                        'Sorry, your message could not be sent. Please try again.';
+
+                    $stmt->close();
+
+                }
+
+            } else {
+
+                $formMessage =
+                    'Sorry, your message could not be sent. Please try again.';
+
+            }
+
+        }
+
     }
 
 }
+
+
+/* =========================================
+   CUSTOMER MESSAGE HISTORY
+========================================= */
+
+if ($isUser && isset($_SESSION['user_id'])) {
+
+    $userId = (int) $_SESSION['user_id'];
+
+
+    $stmt = $conn->prepare("
+        SELECT
+            id,
+            sender,
+            message,
+            is_read,
+            created_at
+        FROM messages
+        WHERE user_id = ?
+        ORDER BY created_at ASC
+    ");
+
+
+    if ($stmt) {
+
+        $stmt->bind_param(
+            "i",
+            $userId
+        );
+
+        $stmt->execute();
+
+        $result = $stmt->get_result();
+
+
+        while ($row = $result->fetch_assoc()) {
+
+            $messages[] = $row;
+
+        }
+
+
+        $stmt->close();
+
+    }
+
 }
 
 ?>
+
 
 <!DOCTYPE html>
 <html lang="en">
@@ -159,6 +203,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         rel="stylesheet"
         href="style.css?v=<?php echo time(); ?>"
     >
+
 
     <style>
 
@@ -524,17 +569,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
 
-        .contact-form-row {
-
-            display: grid;
-
-            grid-template-columns: 1fr 1fr;
-
-            gap: 18px;
-
-        }
-
-
         .contact-field {
 
             display: flex;
@@ -559,8 +593,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
 
-        .contact-field input,
-
         .contact-field textarea {
 
             width: 100%;
@@ -584,13 +616,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
 
-        .contact-field input {
-
-            height: 46px;
-
-        }
-
-
         .contact-field textarea {
 
             height: 140px;
@@ -602,8 +627,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
 
-        .contact-field input:focus,
-
         .contact-field textarea:focus {
 
             border-color: #c49d4c;
@@ -611,11 +634,111 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
 
-        .contact-field input::placeholder,
-
         .contact-field textarea::placeholder {
 
             color: #555;
+
+        }
+
+
+        /* =========================================
+           MESSAGE HISTORY
+        ========================================= */
+
+        .message-history {
+
+            margin-bottom: 30px;
+
+            display: flex;
+
+            flex-direction: column;
+
+            gap: 14px;
+
+        }
+
+
+        .message-history-title {
+
+            color: #c49d4c;
+
+            font-size: 10px;
+
+            font-weight: 700;
+
+            letter-spacing: 2px;
+
+            margin-bottom: 5px;
+
+        }
+
+
+        .message-bubble {
+
+            max-width: 85%;
+
+            padding: 15px 17px;
+
+            border: 1px solid #292929;
+
+        }
+
+
+        .customer-message {
+
+            align-self: flex-end;
+
+            background: #000;
+
+            border-color: #c49d4c;
+
+        }
+
+
+        .admin-message {
+
+            align-self: flex-start;
+
+            background: #181818;
+
+        }
+
+
+        .message-sender {
+
+            color: #c49d4c;
+
+            font-size: 9px;
+
+            font-weight: 700;
+
+            letter-spacing: 1.5px;
+
+            margin-bottom: 8px;
+
+        }
+
+
+        .message-text {
+
+            color: #ddd;
+
+            font-size: 12px;
+
+            line-height: 1.7;
+
+            word-break: break-word;
+
+        }
+
+
+        .message-time {
+
+            color: #555;
+
+            font-size: 9px;
+
+            margin-top: 9px;
 
         }
 
@@ -841,15 +964,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
 
 
-            .contact-form-row {
-
-                grid-template-columns: 1fr;
-
-                gap: 18px;
-
-            }
-
-
             .contact-banner {
 
                 padding: 60px 20px;
@@ -860,6 +974,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             .contact-banner h2 {
 
                 font-size: 28px;
+
+            }
+
+
+            .message-bubble {
+
+                max-width: 92%;
 
             }
 
@@ -1296,7 +1417,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
              CONTACT FORM
         ====================================== -->
 
-        <div class="contact-form-wrapper" id="contact-form-wrapper">
+        <div
+            class="contact-form-wrapper"
+            id="contact-form-wrapper"
+        >
 
 
             <div class="contact-form-title">
@@ -1313,6 +1437,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             </div>
 
 
+            <!-- =====================================
+                 SUCCESS / ERROR MESSAGE
+            ====================================== -->
+
             <?php if (!empty($formMessage)): ?>
 
                 <div
@@ -1321,113 +1449,127 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     <?= $formSuccess ? 'success' : 'error' ?>"
                 >
 
-                    <?= $formMessage ?>
+                    <?= htmlspecialchars($formMessage) ?>
 
                 </div>
 
             <?php endif; ?>
 
 
-            <form
-                class="contact-form"
-                method="POST"
-                action="contact.php"
-            >
+            <!-- =====================================
+                 MESSAGE HISTORY
+            ====================================== -->
 
+            <?php if (!empty($messages)): ?>
 
-                <!-- NAME + EMAIL -->
+                <div class="message-history">
 
-                <div class="contact-form-row">
-
-
-                    <div class="contact-field">
-
-                        <label for="name">
-                            YOUR NAME
-                        </label>
-
-                        <input
-                            type="text"
-                            id="name"
-                            name="name"
-                            placeholder="Enter your name"
-                            value="<?= htmlspecialchars($postName) ?>"
-                            required
-                        >
-
+                    <div class="message-history-title">
+                        YOUR CONVERSATION
                     </div>
 
 
-                    <div class="contact-field">
+                    <?php foreach ($messages as $msg): ?>
 
-                        <label for="email">
-                            EMAIL ADDRESS
-                        </label>
-
-                        <input
-                            type="email"
-                            id="email"
-                            name="email"
-                            placeholder="Enter your email"
-                            value="<?= htmlspecialchars($postEmail) ?>"
-                            required
+                        <div
+                            class="message-bubble
+                            <?= $msg['sender'] === 'customer'
+                                ? 'customer-message'
+                                : 'admin-message' ?>"
                         >
 
-                    </div>
+
+                            <div class="message-sender">
+
+                                <?= $msg['sender'] === 'customer'
+                                    ? 'YOU'
+                                    : 'ABELLA APPAREL' ?>
+
+                            </div>
 
 
-                </div>
+                            <div class="message-text">
+
+                                <?= nl2br(
+                                    htmlspecialchars($msg['message'])
+                                ) ?>
+
+                            </div>
 
 
-                <!-- SUBJECT -->
+                            <div class="message-time">
 
-                <div class="contact-field">
+                                <?= date(
+                                    'M d, Y • h:i A',
+                                    strtotime($msg['created_at'])
+                                ) ?>
 
-                    <label for="subject">
-                        SUBJECT
-                    </label>
-
-                    <input
-                        type="text"
-                        id="subject"
-                        name="subject"
-                        placeholder="What can we help you with?"
-                        value="<?= htmlspecialchars($postSubject) ?>"
-                        required
-                    >
-
-                </div>
+                            </div>
 
 
-                <!-- MESSAGE -->
+                        </div>
 
-                <div class="contact-field">
-
-                    <label for="message">
-                        MESSAGE
-                    </label>
-
-                    <textarea
-                        id="message"
-                        name="message"
-                        placeholder="Write your message here..."
-                        required
-                    ><?= htmlspecialchars($postMessage) ?></textarea>
+                    <?php endforeach; ?>
 
                 </div>
 
+            <?php endif; ?>
 
-                <!-- SUBMIT -->
 
-                <button
-                    type="submit"
-                    class="contact-submit"
+            <!-- =====================================
+                 SEND MESSAGE FORM
+            ====================================== -->
+
+            <?php if ($isUser): ?>
+
+                <form
+                    class="contact-form"
+                    method="POST"
+                    action="contact.php"
                 >
-                    SEND MESSAGE
-                </button>
 
 
-            </form>
+                    <!-- MESSAGE -->
+
+                    <div class="contact-field">
+
+                        <label for="message">
+                            YOUR MESSAGE
+                        </label>
+
+                        <textarea
+                            id="message"
+                            name="message"
+                            placeholder="Write your message here..."
+                            required
+                        ><?= htmlspecialchars($postMessage) ?></textarea>
+
+                    </div>
+
+
+                    <!-- SUBMIT -->
+
+                    <button
+                        type="submit"
+                        class="contact-submit"
+                    >
+                        SEND MESSAGE
+                    </button>
+
+
+                </form>
+
+            <?php else: ?>
+
+                <div class="contact-message error">
+
+                    Please log in to your customer account
+                    before sending a message.
+
+                </div>
+
+            <?php endif; ?>
+
 
         </div>
 
@@ -1685,46 +1827,67 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     <script>
 
-        // Fade out and smoothly collapse the "thank you" message after
-        // a few seconds, so the form below eases up instead of jumping.
+        // Fade out and smoothly collapse the
+        // "Thank you" message after a few seconds.
+
         (function () {
 
-            var msg = document.getElementById('contact-form-message');
+            var msg =
+                document.getElementById(
+                    'contact-form-message'
+                );
+
 
             if (!msg) return;
 
+
             setTimeout(function () {
 
-                // Lock in the current height so we can animate FROM it.
-                var startHeight = msg.offsetHeight;
+                var startHeight =
+                    msg.offsetHeight;
 
-                msg.style.height = startHeight + 'px';
-                msg.style.overflow = 'hidden';
 
-                // Force the browser to register the height above
-                // before we change it, so the transition actually runs.
+                msg.style.height =
+                    startHeight + 'px';
+
+                msg.style.overflow =
+                    'hidden';
+
+
+                // Force browser reflow.
+
                 msg.offsetHeight;
 
+
                 msg.style.transition =
-                    'opacity 0.4s ease, height 0.4s ease 0.2s, ' +
-                    'margin 0.4s ease 0.2s, padding 0.4s ease 0.2s';
+                    'opacity 0.4s ease, ' +
+                    'height 0.4s ease 0.2s, ' +
+                    'margin 0.4s ease 0.2s, ' +
+                    'padding 0.4s ease 0.2s';
+
 
                 msg.style.opacity = '0';
+
 
                 setTimeout(function () {
 
                     msg.style.height = '0';
+
                     msg.style.marginBottom = '0';
+
                     msg.style.paddingTop = '0';
+
                     msg.style.paddingBottom = '0';
 
                 }, 400);
+
 
                 setTimeout(function () {
 
                     msg.remove();
 
                 }, 850);
+
 
             }, 3500);
 
@@ -1733,6 +1896,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     </script>
 
 <?php endif; ?>
+
 
 </body>
 
