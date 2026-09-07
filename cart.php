@@ -40,6 +40,19 @@ if (isset($_SESSION['cart'])) {
 
 if (isset($_POST['add_to_cart'])) {
 
+
+    /* =========================================
+       REQUIRE LOGIN BEFORE ADDING TO CART
+    ========================================= */
+
+    if (!$isLoggedIn) {
+
+        header("Location: http://localhost/login_register/");
+        exit();
+
+    }
+
+
     $productId = isset($_POST['product_id'])
         ? (int)$_POST['product_id']
         : 0;
@@ -1631,7 +1644,7 @@ unset($_SESSION['cart_message']);
 
             <!-- =========================================
                  EMPTY CART
-            ========================================== -->
+            ========================================= -->
 
             <?php if (empty($cart)): ?>
 
@@ -1661,7 +1674,7 @@ unset($_SESSION['cart_message']);
 
                 <!-- =========================================
                      CART ITEMS
-                ========================================== -->
+                ========================================= -->
 
                 <div class="cart-items">
 
@@ -2000,7 +2013,7 @@ unset($_SESSION['cart_message']);
 
 
                         <a
-                            href="checkout.php"
+                            href="<?= $isLoggedIn ? 'checkout.php' : 'http://localhost/login_register/' ?>"
                             class="checkout-button"
                         >
                             CHECKOUT
