@@ -2,12 +2,8 @@
 
 session_start();
 
-require_once '../login_register/config.php';
+require_once 'config.php';
 
-
-/* =========================================
-   LOGIN STATUS
-========================================= */
 
 $isLoggedIn = isset($_SESSION['logged_in'])
     && $_SESSION['logged_in'] === true;
@@ -16,10 +12,6 @@ $isUser = $isLoggedIn
     && isset($_SESSION['user_role'])
     && $_SESSION['user_role'] === 'user';
 
-
-/* =========================================
-   CART COUNT
-========================================= */
 
 $cartCount = 0;
 
@@ -34,20 +26,14 @@ if (isset($_SESSION['cart'])) {
 }
 
 
-/* =========================================
-   ADD TO CART
-========================================= */
-
 if (isset($_POST['add_to_cart'])) {
 
 
-    /* =========================================
-       REQUIRE LOGIN BEFORE ADDING TO CART
-    ========================================= */
+
 
     if (!$isLoggedIn) {
 
-        header("Location: http://localhost/login_register/");
+        header("Location: login.php");
         exit();
 
     }
@@ -71,9 +57,6 @@ if (isset($_POST['add_to_cart'])) {
         && $_POST['buy_now'] == '1';
 
 
-    /* =========================================
-       FIND PRODUCT
-    ========================================= */
 
     if ($productId > 0) {
 
@@ -109,9 +92,6 @@ if (isset($_POST['add_to_cart'])) {
     $stmt->close();
 
 
-    /* =========================================
-       PRODUCT NOT FOUND
-    ========================================= */
 
     if (!$product) {
 
@@ -127,10 +107,6 @@ if (isset($_POST['add_to_cart'])) {
     $stock = (int)$product['stock'];
 
 
-    /* =========================================
-       OUT OF STOCK
-    ========================================= */
-
     if ($stock <= 0) {
 
         $_SESSION['cart_message'] =
@@ -141,10 +117,6 @@ if (isset($_POST['add_to_cart'])) {
 
     }
 
-
-    /* =========================================
-       REQUESTED QUANTITY TOO HIGH
-    ========================================= */
 
     if ($requestedQuantity > $stock) {
 
@@ -161,9 +133,6 @@ if (isset($_POST['add_to_cart'])) {
     }
 
 
-    /* =========================================
-       CREATE CART
-    ========================================= */
 
     if (!isset($_SESSION['cart'])) {
 
@@ -219,10 +188,6 @@ if (isset($_POST['add_to_cart'])) {
     unset($item);
 
 
-    /* =========================================
-       ADD NEW PRODUCT
-    ========================================= */
-
     if (!$found) {
 
         $_SESSION['cart'][] = [
@@ -246,10 +211,6 @@ if (isset($_POST['add_to_cart'])) {
 
     }
 
-
-    /* =========================================
-       BUY NOW
-    ========================================= */
 
     if (
         isset($_SESSION['cart_message'])
@@ -276,10 +237,6 @@ if (isset($_POST['add_to_cart'])) {
 
 }
 
-
-/* =========================================
-   INCREASE QUANTITY
-========================================= */
 
 if (isset($_POST['increase'])) {
 
@@ -357,10 +314,6 @@ if (isset($_POST['increase'])) {
 }
 
 
-/* =========================================
-   DECREASE QUANTITY
-========================================= */
-
 if (isset($_POST['decrease'])) {
 
     $index = (int)($_POST['index'] ?? -1);
@@ -392,10 +345,6 @@ if (isset($_POST['decrease'])) {
 }
 
 
-/* =========================================
-   REMOVE ITEM
-========================================= */
-
 if (isset($_POST['remove'])) {
 
     $index = (int)($_POST['index'] ?? -1);
@@ -417,10 +366,6 @@ if (isset($_POST['remove'])) {
 }
 
 
-/* =========================================
-   CLEAR CART
-========================================= */
-
 if (isset($_POST['clear_cart'])) {
 
     $_SESSION['cart'] = [];
@@ -431,16 +376,8 @@ if (isset($_POST['clear_cart'])) {
 }
 
 
-/* =========================================
-   GET CART
-========================================= */
-
 $cart = $_SESSION['cart'] ?? [];
 
-
-/* =========================================
-   REFRESH PRODUCT INFORMATION
-========================================= */
 
 foreach ($cart as $index => &$item) {
 
@@ -515,10 +452,6 @@ foreach ($cart as $index => &$item) {
             (int)$product['stock'];
 
 
-        /* =========================================
-           LIMIT QUANTITY TO CURRENT STOCK
-        ========================================= */
-
         if (
             $item['stock'] > 0
             &&
@@ -538,16 +471,8 @@ foreach ($cart as $index => &$item) {
 unset($item);
 
 
-/* =========================================
-   SAVE UPDATED CART
-========================================= */
-
 $_SESSION['cart'] = $cart;
 
-
-/* =========================================
-   TOTALS
-========================================= */
 
 $total = 0;
 
@@ -565,11 +490,6 @@ foreach ($cart as $item) {
         (int)$item['quantity'];
 
 }
-
-
-/* =========================================
-   CART MESSAGE
-========================================= */
 
 $cartMessage =
     $_SESSION['cart_message'] ?? '';
@@ -596,10 +516,6 @@ unset($_SESSION['cart_message']);
     </title>
 
 
-    <!-- =========================================
-         SHARED ABELLA APPAREL STYLE
-    ========================================== -->
-
     <link
         rel="stylesheet"
         href="style.css?v=<?php echo time(); ?>"
@@ -608,9 +524,6 @@ unset($_SESSION['cart_message']);
 
     <style>
 
-        /* =========================================
-           CART PAGE
-        ========================================= */
 
         .cart-page {
 
@@ -622,10 +535,6 @@ unset($_SESSION['cart_message']);
 
         }
 
-
-        /* =========================================
-           CART HERO
-        ========================================= */
 
         .cart-hero {
 
@@ -715,10 +624,6 @@ unset($_SESSION['cart_message']);
         }
 
 
-        /* =========================================
-           CART CONTAINER
-        ========================================= */
-
         .cart-container {
 
             max-width: 1180px;
@@ -729,10 +634,6 @@ unset($_SESSION['cart_message']);
 
         }
 
-
-        /* =========================================
-           CART MESSAGE
-        ========================================= */
 
         .cart-message {
 
@@ -750,10 +651,6 @@ unset($_SESSION['cart_message']);
 
         }
 
-
-        /* =========================================
-           EMPTY CART
-        ========================================= */
 
         .empty-cart {
 
@@ -822,10 +719,6 @@ unset($_SESSION['cart_message']);
         }
 
 
-        /* =========================================
-           CART ITEMS
-        ========================================= */
-
         .cart-items {
 
             background: #fff;
@@ -863,10 +756,6 @@ unset($_SESSION['cart_message']);
         }
 
 
-        /* =========================================
-           PRODUCT IMAGE
-        ========================================= */
-
         .cart-item-image {
 
             width: 120px;
@@ -893,9 +782,6 @@ unset($_SESSION['cart_message']);
         }
 
 
-        /* =========================================
-           PRODUCT INFORMATION
-        ========================================= */
 
         .cart-item-info h3 {
 
@@ -947,10 +833,6 @@ unset($_SESSION['cart_message']);
 
         }
 
-
-        /* =========================================
-           QUANTITY
-        ========================================= */
 
         .quantity-box {
 
@@ -1033,10 +915,6 @@ unset($_SESSION['cart_message']);
         }
 
 
-        /* =========================================
-           SUBTOTAL
-        ========================================= */
-
         .cart-item-subtotal {
 
             text-align: right;
@@ -1079,10 +957,6 @@ unset($_SESSION['cart_message']);
         }
 
 
-        /* =========================================
-           CART BOTTOM
-        ========================================= */
-
         .cart-bottom {
 
             display: grid;
@@ -1100,9 +974,6 @@ unset($_SESSION['cart_message']);
         }
 
 
-        /* =========================================
-           ACTIONS
-        ========================================= */
 
         .cart-actions {
 
@@ -1146,10 +1017,6 @@ unset($_SESSION['cart_message']);
 
         }
 
-
-        /* =========================================
-           SUMMARY
-        ========================================= */
 
         .summary {
 
@@ -1207,11 +1074,6 @@ unset($_SESSION['cart_message']);
 
         }
 
-
-        /* =========================================
-           CHECKOUT
-        ========================================= */
-
         .checkout-button {
 
             display: block;
@@ -1246,11 +1108,6 @@ unset($_SESSION['cart_message']);
             background: #fff;
 
         }
-
-
-        /* =========================================
-           RESPONSIVE
-        ========================================= */
 
         @media (max-width: 900px) {
 
@@ -1407,12 +1264,6 @@ unset($_SESSION['cart_message']);
 
 <div class="site">
 
-
-    <!-- =========================================
-         HEADER
-         SAME HEADER AS HOODIES.PHP
-    ========================================== -->
-
     <header class="header">
 
         <div class="header-inner">
@@ -1429,9 +1280,6 @@ unset($_SESSION['cart_message']);
                 >
 
             </a>
-
-
-            <!-- NAVIGATION -->
 
             <nav class="nav">
 
@@ -1461,13 +1309,7 @@ unset($_SESSION['cart_message']);
 
             </nav>
 
-
-            <!-- ICONS -->
-
             <div class="icons">
-
-
-                <!-- SEARCH -->
 
                 <a
                     href="search.php"
@@ -1499,13 +1341,10 @@ unset($_SESSION['cart_message']);
 
                 </a>
 
-
-                <!-- ACCOUNT -->
-
                 <a
                     href="<?= $isUser
-                        ? 'http://localhost/login_register/user_page.php'
-                        : 'http://localhost/login_register/' ?>"
+                        ? 'user_page.php'
+                        : 'login.php' ?>"
                     class="icon"
                     aria-label="Account"
                 >
@@ -1530,9 +1369,6 @@ unset($_SESSION['cart_message']);
                     </svg>
 
                 </a>
-
-
-                <!-- CART -->
 
                 <a
                     href="cart.php"
@@ -1589,17 +1425,7 @@ unset($_SESSION['cart_message']);
 
     </header>
 
-
-    <!-- =========================================
-         CART PAGE
-    ========================================== -->
-
     <main class="cart-page">
-
-
-        <!-- =========================================
-             HERO
-        ========================================== -->
 
         <section class="cart-hero">
 
@@ -1621,11 +1447,6 @@ unset($_SESSION['cart_message']);
 
         </section>
 
-
-        <!-- =========================================
-             CART CONTENT
-        ========================================== -->
-
         <section class="cart-container">
 
 
@@ -1640,11 +1461,6 @@ unset($_SESSION['cart_message']);
                 </div>
 
             <?php endif; ?>
-
-
-            <!-- =========================================
-                 EMPTY CART
-            ========================================= -->
 
             <?php if (empty($cart)): ?>
 
@@ -1671,11 +1487,6 @@ unset($_SESSION['cart_message']);
 
             <?php else: ?>
 
-
-                <!-- =========================================
-                     CART ITEMS
-                ========================================= -->
-
                 <div class="cart-items">
 
 
@@ -1687,22 +1498,11 @@ unset($_SESSION['cart_message']);
                         $imagePath =
                             $item['image'] ?? '';
 
-
-                        /*
-                         * If image is already a full URL,
-                         * leave it unchanged.
-                         */
-
                         if (
                             strpos($imagePath, 'http://') !== 0
                             &&
                             strpos($imagePath, 'https://') !== 0
                         ) {
-
-                            /*
-                             * Database images are stored
-                             * relative to the assets folder.
-                             */
 
                             if (
                                 strpos($imagePath, 'assets/') !== 0
@@ -1723,11 +1523,8 @@ unset($_SESSION['cart_message']);
 
                         ?>
 
-
                         <div class="cart-item">
 
-
-                            <!-- IMAGE -->
 
                             <div class="cart-item-image">
 
@@ -1738,9 +1535,6 @@ unset($_SESSION['cart_message']);
                                 >
 
                             </div>
-
-
-                            <!-- INFORMATION -->
 
                             <div class="cart-item-info">
 
@@ -1790,13 +1584,7 @@ unset($_SESSION['cart_message']);
 
                             </div>
 
-
-                            <!-- QUANTITY -->
-
                             <div class="quantity-box">
-
-
-                                <!-- DECREASE -->
 
                                 <form method="POST">
 
@@ -1815,17 +1603,11 @@ unset($_SESSION['cart_message']);
 
                                 </form>
 
-
-                                <!-- CURRENT QUANTITY -->
-
                                 <span>
 
                                     <?= (int)$item['quantity'] ?>
 
                                 </span>
-
-
-                                <!-- INCREASE -->
 
                                 <form method="POST">
 
@@ -1855,9 +1637,6 @@ unset($_SESSION['cart_message']);
 
 
                             </div>
-
-
-                            <!-- SUBTOTAL -->
 
                             <div class="cart-item-subtotal">
 
@@ -1902,11 +1681,6 @@ unset($_SESSION['cart_message']);
 
                 </div>
 
-
-                <!-- =========================================
-                     BOTTOM
-                ========================================== -->
-
                 <div class="cart-bottom">
 
 
@@ -1938,9 +1712,6 @@ unset($_SESSION['cart_message']);
 
 
                     </div>
-
-
-                    <!-- SUMMARY -->
 
                     <div class="summary">
 
@@ -2013,7 +1784,7 @@ unset($_SESSION['cart_message']);
 
 
                         <a
-                            href="<?= $isLoggedIn ? 'checkout.php' : 'http://localhost/login_register/' ?>"
+                            href="<?= $isLoggedIn ? 'checkout.php' : 'login.php' ?>"
                             class="checkout-button"
                         >
                             CHECKOUT
@@ -2033,12 +1804,6 @@ unset($_SESSION['cart_message']);
 
 
     </main>
-
-
-    <!-- =========================================
-         FOOTER
-         SAME FOOTER AS HOODIES.PHP
-    ========================================== -->
 
     <footer class="footer">
 

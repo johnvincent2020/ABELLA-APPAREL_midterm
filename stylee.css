@@ -1,0 +1,195 @@
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap');
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: "Poppins", sans-serif;
+}
+body {
+    min-height: 100vh;
+
+    display: flex;
+    justify-content: center;
+    align-items: center;
+
+    background: #000;
+
+    color: #fff;
+}
+.container {
+    width: 100%;
+    max-width: 1000px;
+
+    margin: 0 auto;
+    padding: 30px;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    gap: 70px;
+}
+.container::before {
+    content: "";
+    width: 430px;
+    height: 130px;
+    display: block;
+    background-image: url("assets/header-logo.png");
+    background-repeat: no-repeat;
+    background-position: left center;
+    background-size: contain;
+}
+.container::after {
+    display: none;
+}
+.form-box {
+    width: 400px;
+    max-width: 400px;
+    padding: 25px;
+    background: #111;
+    border: 1px solid #292929;
+    border-radius: 10px;
+    box-shadow: 0 10px 35px rgba(0, 0, 0, 0.6);
+    display: none;
+}
+.form-box.active {
+    display: block;
+}
+h2 {
+    font-size: 30px;
+    text-align: center;
+    margin-bottom: 20px;
+    color: #fff;
+    font-weight: 600;
+}
+input,
+select {
+    width: 100%;
+    height: 52px;
+    padding: 0 15px;
+    background: #1a1a1a;
+    border: 1px solid #292929;
+    outline: none;
+    font-size: 15px;
+    color: #fff;
+    margin-bottom: 15px;
+    border-radius: 6px;
+    transition: 0.2s ease;
+}
+input::placeholder {
+    color: #777;
+}
+input:focus,
+select:focus {
+    border-color: #c49d4c;
+    box-shadow: 0 0 0 1px #c49d4c;
+}
+select option {
+    background: #1a1a1a;
+    color: #fff;
+}
+button {
+    width: 100%;
+    height: 50px;
+    background: #c49d4c;
+    border: 1px solid #c49d4c;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 16px;
+    color: #111;
+    font-weight: 700;
+    margin-bottom: 18px;
+    transition: 0.2s ease;
+}
+
+button:hover {
+    background: #b3893a;
+    border-color: #b3893a;
+}
+p {
+    font-size: 14px;
+    text-align: center;
+    margin-bottom: 10px;
+    color: #aaa;
+}
+p a {
+    color: #c49d4c;
+    text-decoration: none;
+    font-weight: 700;
+}
+p a:hover {
+    color: #fff;
+    text-decoration: underline;
+}
+.error-slot {
+    min-height: 48px;
+    margin-bottom: 15px;
+}
+.error-message {
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 12px;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    font-size: 14px;
+    color: transparent;
+    text-align: center;
+    opacity: 0;
+    transition:
+        opacity 0.5s ease,
+        background 0.5s ease,
+        color 0.5s ease,
+        border-color 0.5s ease;
+}
+.error-message.show {
+    background: #3a1719;
+    border-color: #f28b8b;
+    color: #f28b8b;
+    opacity: 1;
+}
+h1 {
+    font-size: 50px;
+}
+span {
+    color: #c49d4c;
+}
+.box p {
+    font-size: 22px;
+}
+.box button {
+    display: block;
+    width: 200px;
+    margin: 0 auto;
+}
+@media (max-width: 850px) {
+    .container {
+        flex-direction: column;
+        gap: 25px;
+        padding: 25px 15px;
+    }
+    .container::before {
+        width: 100%;
+        height: 100px;
+        background-position: center;
+        background-size: contain;
+    }
+    .form-box {
+        width: 100%;
+        max-width: 400px;
+    }
+}
+@media (max-width: 450px) {
+    .container::before {
+        height: 80px;
+    }
+    .form-box {
+        padding: 20px;
+    }
+    h2 {
+        font-size: 26px;
+    }
+}

@@ -3,17 +3,14 @@
     margin: 0;
     padding: 0;
 }
-
 html {
     background: #000;
 }
-
 body {
     font-family: Arial, Helvetica, sans-serif;
     background: #000;
     color: #111;
 }
-
 .site {
     width: 100%;
     max-width: 1180px;
@@ -21,15 +18,11 @@ body {
     background: #f8f8e9;
     min-height: 100vh;
 }
-
-/* ================= HEADER ================= */
-
 .header {
     height: 92px;
     background: #050505;
     color: #fff;
 }
-
 .header-inner {
     height: 100%;
     display: flex;
@@ -37,14 +30,12 @@ body {
     padding: 0 42px;
     gap: 48px;
 }
-
 .logo {
     width: 110px;
     height: 58px;
     object-fit: contain;
     display: block;
 }
-
 .nav {
     display: flex;
     gap: 80px;
@@ -53,24 +44,20 @@ body {
     font-size: 10px;
     letter-spacing: .5px;
 }
-
 .nav a {
     color: #fff;
     text-decoration: none;
     cursor: pointer;
     font-weight: bold;
 }
-
 .nav a:hover {
     color: #c49d4c;
 }
-
 .icons {
     display: flex;
     gap: 18px;
     align-items: center;
 }
-
 .icons .icon {
     width: 17px;
     height: 17px;
@@ -78,32 +65,25 @@ body {
     color: #fff;
     cursor: pointer;
 }
-
 .icons .icon svg {
     width: 100%;
     height: 100%;
 }
-
 .icons .icon:hover {
     color: #c49d4c;
 }
-
-/* ================= HERO ================= */
-
 .hero {
     height: 800px;
     position: relative;
     overflow: hidden;
     background: #ffffff;
 }
-
 .hero-copy {
     position: absolute;
     left: 55px;
     top: 54px;
     z-index: 2;
 }
-
 .abella {
     display: block;
     width: 800px;
@@ -111,7 +91,6 @@ body {
     max-width: 100%;
     margin-top: 35px;
 }
-
 .hero-card {
     width: 500px;
     background: #050505;
@@ -119,12 +98,10 @@ body {
     padding: 25px;
     margin-top: 22px;
 }
-
 .hero-card small {
     font-size: 12px;
     letter-spacing: 2px;
 }
-
 .hero-card h1 {
     font-size: 30px;
     font-weight: 800;
@@ -132,19 +109,16 @@ body {
     letter-spacing: .5px;
     margin: 13px 0;
 }
-
 .hero-card .line {
     height: 1px;
     background: #ffffff;
     margin: 10px 0;
 }
-
 .hero-card p {
     font-size: 10px;
     line-height: 1.5;
     letter-spacing: .5px;
 }
-
 .shop-button {
     display: inline-flex;
     align-items: center;
@@ -155,19 +129,16 @@ body {
     background: #f8f8e9;
     cursor: pointer;
 }
-
 .shop-button b {
     font-size: 19px;
     margin-left: 18px;
     font-weight: 400;
 }
-
 .shop-button:hover {
     background: #050505;
     color: #fff;
     border-color: #050505;
 }
-
 .hero-model {
     position: absolute;
     right: 35px;
@@ -180,9 +151,6 @@ body {
     -webkit-mask-image: linear-gradient(to right, transparent, #000 1%);
     mask-image: linear-gradient(to right, transparent, #000 1%);
 }
-
-/* ================= BENEFITS ================= */
-
 .benefits {
     height: 120px;
     background: #050505;
@@ -191,7 +159,6 @@ body {
     grid-template-columns: repeat(4, 1fr);
     padding: 30px 28px;
 }
-
 .benefits > div {
     padding: 0 28px;
     border-right: 1px solid #b08b32;
@@ -199,11 +166,9 @@ body {
     flex-direction: column;
     justify-content: center;
 }
-
 .benefits > div:last-child {
     border-right: 0;
 }
-
 .benefit-icon {
     width: 26px;
     height: 26px;
@@ -211,31 +176,24 @@ body {
     display: block;
     margin-bottom: 10px;
 }
-
 .benefit-icon svg {
     width: 100%;
     height: 100%;
 }
-
 .benefits b {
     display: block;
     font-size: 9px;
     margin-bottom: 9px;
     letter-spacing: .5px;
 }
-
 .benefits small {
     font-size: 8px;
     color: #ddd;
     line-height: 1.4;
 }
-
-/* ================= PRODUCTS ================= */
-
 .products {
     padding: 55px 40px 65px;
 }
-
 .products h2,
 .instagram h2 {
     text-align: center;
@@ -243,25 +201,21 @@ body {
     font-weight: 400;
     text-transform: lowercase;
 }
-
 .products h2 {
     text-transform: uppercase;
     font-weight: bold;
 }
-
 .gold-line {
     width: 105px;
     height: 2px;
     background: #b89645;
     margin: 14px auto 40px;
 }
-
 .product-grid {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
     gap: 50px 38px;
 }
-
 .product img,
 .product .img-missing {
     width: 100%;
@@ -270,7 +224,6 @@ body {
     border: 2px solid #222;
     display: block;
 }
-
 .product .img-missing {
     display: flex;
     align-items: center;
@@ -282,17 +235,14 @@ body {
     letter-spacing: .5px;
     padding: 10px;
 }
-
 .product p {
     font-size: 10px;
     margin-top: 7px;
 }
-
 .product strong {
     font-size: 10px;
     font-weight: 400;
 }
-
 .product button {
     display: block;
     background: #050505;
@@ -303,11 +253,9 @@ body {
     margin-top: 4px;
     cursor: pointer;
 }
-
 .product button:hover {
     background: #c49d4c;
 }
-
 .view-button {
     border: 1px solid #111;
     display: block;
@@ -317,14 +265,10 @@ body {
     font-size: 10px;
     cursor: pointer;
 }
-
 .view-button:hover {
     background: #050505;
     color: #fff;
 }
-
-/* ================= EDITORIAL ================= */
-
 .editorial {
     display: grid;
     grid-template-columns: 1fr 1.18fr .9fr;
@@ -332,7 +276,6 @@ body {
     align-items: center;
     padding: 0 20px 40px;
 }
-
 .editorial img {
     width: 100%;
     aspect-ratio: 3 / 4;
@@ -340,13 +283,9 @@ body {
     object-fit: fill;
     background: #050505;
 }
-
 .editorial .editorial-center {
     aspect-ratio: 3 / 4.7;
 }
-
-/* ================= NEWSLETTER ================= */
-
 .newsletter {
     height: 110px;
     background: #050505;
@@ -357,7 +296,6 @@ body {
     padding: 20px 70px;
     margin-top: 60px;
 }
-
 .newsletter h3 {
     font-size: 17px;
     line-height: 1.05;
@@ -368,18 +306,15 @@ body {
     color: #c49d4c;
     font-weight: 900;
 }
-
 .newsletter h3 span {
     font-size: 13px;
 }
-
 .newsletter p {
     font-size: 8px;
     margin-top: 12px;
     color: #ddd;
     line-height: 1.4;
 }
-
 .email-box {
     height: 30px;
     width: 310px;
@@ -389,12 +324,10 @@ body {
     justify-content: space-between;
     font-size: 7px;
 }
-
 .email-box span {
     padding-left: 10px;
     color: #ddd;
 }
-
 .email-box b {
     background: #c49d4c;
     color: #fff;
@@ -406,13 +339,9 @@ body {
     cursor: pointer;
     font-weight: 400;
 }
-
-/* ================= INSTAGRAM ================= */
-
 .instagram {
     padding: 32px 20px 38px;
 }
-
 .instagram h2 {
     font-size: 15px;
     letter-spacing: 2px;
@@ -420,20 +349,17 @@ body {
     text-transform: uppercase;
     font-weight: bold;
 }
-
 .ig-grid {
     display: grid;
     grid-template-columns: repeat(6, 1fr);
     gap: 4px;
 }
-
 .ig-grid img {
     width: 100%;
     aspect-ratio: 1;
     object-fit: cover;
     display: block;
 }
-
 .ig-follow {
     width: 100%;
     aspect-ratio: 1;
@@ -447,40 +373,32 @@ body {
     letter-spacing: 1px;
     text-decoration: none;
 }
-
-/* ================= FOOTER ================= */
-
 .footer {
     background: #050505;
     color: #fff;
     padding: 28px 45px 12px;
 }
-
 .footer-main {
     display: grid;
     grid-template-columns: 2fr 1fr 1fr 1fr 1fr;
     gap: 30px;
 }
-
 .footer-brand img {
     width: 110px;
     height: 58px;
     object-fit: contain;
 }
-
 .footer p {
     font-size: 7px;
     line-height: 1.8;
     color: #ddd;
     margin-top: 8px;
 }
-
 .footer h4 {
     font-size: 7px;
     letter-spacing: 1px;
     margin-bottom: 8px;
 }
-
 .copyright {
     border-top: 1px solid #b89645;
     margin-top: 24px;
@@ -492,16 +410,12 @@ body {
     align-items: center;
     width: 100%;
 }
-
-/* ================= SOCIAL ICONS ================= */
-
 .social {
     display: flex;
     align-items: center;
     gap: 25px;
     margin-top: 14px;
 }
-
 .social-icon {
     width: 26px;
     height: 26px;
@@ -512,156 +426,112 @@ body {
     align-items: center;
     flex-shrink: 0;
 }
-
 .social-icon svg {
     width: 15px;
     height: 15px;
     fill: #000;
 }
-
-/* Instagram */
 .social-icon.ig svg {
     fill: none;
     stroke: #000;
     stroke-width: 1.6;
 }
-
 .social-icon.ig .dot {
     fill: none;
 }
-
 .social-icon.ig .dot:last-child {
     fill: #000;
     stroke: none;
 }
-
-/* TikTok */
 .social-icon.tiktok svg {
     fill: #000;
 }
-
-/* ================= RESPONSIVE ================= */
-
 @media (max-width: 800px) {
     .site {
         max-width: 100%;
     }
-
     .header-inner {
         padding: 0 18px;
         gap: 15px;
     }
-
     .nav {
         gap: 12px;
         font-size: 7px;
     }
-
     .icons {
         gap: 10px;
     }
-
     .icons .icon {
         width: 13px;
         height: 13px;
     }
-
     .hero {
         height: 540px;
     }
-
     .hero-copy {
         left: 28px;
     }
-
     .abella {
     width: 300px;
-}
-
+    }
     .hero-card {
         width: 330px;
     }
-
     .product-grid {
         gap: 30px 18px;
     }
-
     .newsletter {
         padding: 20px 30px;
     }
 }
-
-/* ================= CLICKABLE LINKS ================= */
-
 .nav a {
     color: #fff;
     text-decoration: none;
 }
-
 .icons .icon {
     color: #fff;
     text-decoration: none;
 }
-
 .shop-button {
     color: #111;
     text-decoration: none;
 }
-
 .view-button {
     color: #111;
     text-decoration: none;
 }
-
 .shop-button:hover,
 .view-button:hover {
     text-decoration: none;
 }
-
 .icons .icon {
     color: #fff;
     text-decoration: none;
     cursor: pointer;
 }
-
 .icons .icon:hover {
     color: #c49d4c;
 }
-
 .cart-icon {
     position: relative;
 }
-
 .cart-count {
     position: absolute;
-
     top: -8px;
     right: -9px;
-
     min-width: 15px;
     height: 15px;
-
     padding: 0 4px;
-
     background: #c49d4c;
     color: #000;
-
     border-radius: 50%;
-
     font-size: 9px;
     font-weight: bold;
-
     display: flex;
     align-items: center;
     justify-content: center;
-
     line-height: 1;
 }
-
-/* =========================
-   ADMIN PRODUCT & STOCK BUTTON
-========================= */
-
 .product-management-btn {
     background: #111;
     color: #fff;
@@ -676,9 +546,41 @@ body {
     align-items: center;
     justify-content: center;
 }
-
 .product-management-btn:hover {
     background: #c49d4c;
     color: #000;
 }
  
+/* Newsletter subscribe form */
+.email-box {
+    position: relative;
+}
+.email-box input.email-input {
+    flex: 1;
+    height: 100%;
+    padding-left: 10px;
+    border: none;
+    outline: none;
+    background: transparent;
+    color: #fff;
+    font-size: 8px;
+    font-family: inherit;
+}
+.email-box input.email-input::placeholder {
+    color: #ddd;
+}
+.newsletter-message {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    margin-top: 6px;
+    font-size: 9px;
+    letter-spacing: 0.5px;
+    white-space: nowrap;
+}
+.newsletter-message.success {
+    color: #7edb8a;
+}
+.newsletter-message.error {
+    color: #f28b8b;
+}

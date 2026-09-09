@@ -2,19 +2,10 @@
 
 session_start();
 
-/* =========================
-   LOGIN CHECK
-========================= */
-
 if (!isset($_SESSION['logged_in']) || $_SESSION['logged_in'] !== true) {
-    header("Location: http://localhost/login_register/");
+    header("Location: login.php");
     exit();
 }
-
-
-/* =========================
-   CART CHECK
-========================= */
 
 $cart = $_SESSION['cart'] ?? [];
 
@@ -22,11 +13,6 @@ if (empty($cart)) {
     header("Location: cart.php");
     exit();
 }
-
-
-/* =========================
-   CALCULATE TOTAL
-========================= */
 
 $total = 0;
 $totalItems = 0;
@@ -72,18 +58,12 @@ $userEmail = $_SESSION['user_email'] ?? '';
             color: #111;
         }
 
-        /* =========================
-           HEADER
-        ========================= */
-
         .checkout-header {
             background: #000;
             height: 92px;
-
             display: flex;
             align-items: center;
             justify-content: space-between;
-
             padding: 0 6%;
         }
 
@@ -95,7 +75,6 @@ $userEmail = $_SESSION['user_email'] ?? '';
         .back-link {
             color: #fff;
             text-decoration: none;
-
             font-size: 13px;
             letter-spacing: 1px;
             font-weight: bold;
@@ -105,73 +84,51 @@ $userEmail = $_SESSION['user_email'] ?? '';
             color: #c49d4c;
         }
 
-        /* =========================
-           MAIN
-        ========================= */
-
         .checkout-container {
             max-width: 1180px;
 
             margin: 50px auto;
-
             padding: 0 25px;
         }
 
         .checkout-title {
             text-align: center;
-
             margin-bottom: 45px;
         }
 
         .checkout-title h1 {
             font-size: 36px;
-
             letter-spacing: 2px;
-
             margin-bottom: 10px;
         }
 
         .checkout-title p {
             color: #666;
-
             font-size: 14px;
         }
 
         .checkout-layout {
             display: grid;
-
             grid-template-columns: 1.5fr 1fr;
-
             gap: 35px;
-
             align-items: start;
         }
 
-        /* =========================
-           FORM
-        ========================= */
-
         .checkout-form {
             background: #fff;
-
             padding: 35px;
-
             border: 1px solid #ddd;
         }
 
         .section-title {
             font-size: 20px;
-
             letter-spacing: 1px;
-
             margin-bottom: 25px;
         }
 
         .form-row {
             display: grid;
-
             grid-template-columns: 1fr 1fr;
-
             gap: 18px;
         }
 
@@ -185,15 +142,10 @@ $userEmail = $_SESSION['user_email'] ?? '';
 
         label {
             display: block;
-
             font-size: 12px;
-
             font-weight: bold;
-
             letter-spacing: 1px;
-
             margin-bottom: 8px;
-
             text-transform: uppercase;
         }
 
@@ -201,17 +153,11 @@ $userEmail = $_SESSION['user_email'] ?? '';
         textarea,
         select {
             width: 100%;
-
             padding: 14px;
-
             border: 1px solid #ccc;
-
             background: #fff;
-
             font-family: inherit;
-
             font-size: 14px;
-
             outline: none;
         }
 
@@ -223,13 +169,8 @@ $userEmail = $_SESSION['user_email'] ?? '';
 
         textarea {
             height: 100px;
-
             resize: vertical;
         }
-
-        /* =========================
-           PAYMENT
-        ========================= */
 
         .payment-box {
             margin-top: 10px;
@@ -237,15 +178,10 @@ $userEmail = $_SESSION['user_email'] ?? '';
 
         .payment-option {
             border: 1px solid #ccc;
-
             padding: 16px;
-
             display: flex;
-
             align-items: center;
-
             gap: 12px;
-
             cursor: pointer;
         }
 
@@ -257,95 +193,64 @@ $userEmail = $_SESSION['user_email'] ?? '';
             font-size: 14px;
         }
 
-        /* =========================
-           ORDER SUMMARY
-        ========================= */
 
         .order-summary {
             background: #000;
-
             color: #fff;
-
             padding: 30px;
-
             position: sticky;
-
             top: 25px;
         }
 
         .order-summary h2 {
             font-size: 20px;
-
             letter-spacing: 1px;
-
             margin-bottom: 25px;
         }
 
         .order-item {
             display: grid;
-
             grid-template-columns: 65px 1fr auto;
-
             gap: 15px;
-
             align-items: center;
-
             padding: 15px 0;
-
             border-bottom: 1px solid #333;
         }
 
-        /* =========================
-           PRODUCT PHOTO
-        ========================= */
-
         .order-item-image {
             width: 65px;
-
             height: 75px;
-
             background: #fff;
-
             overflow: hidden;
         }
 
         .order-item-image img {
             width: 100%;
-
             height: 100%;
-
             object-fit: cover;
-
             display: block;
         }
 
         .order-item-name {
             font-size: 13px;
-
             font-weight: bold;
-
             margin-bottom: 6px;
         }
 
         .order-item-quantity {
             font-size: 12px;
-
             color: #aaa;
         }
 
         .order-item-price {
             font-size: 13px;
-
             white-space: nowrap;
         }
 
         .summary-row {
             display: flex;
-
             justify-content: space-between;
-
             padding: 12px 0;
-
             font-size: 14px;
         }
 
@@ -355,9 +260,7 @@ $userEmail = $_SESSION['user_email'] ?? '';
 
         .summary-row.total {
             font-size: 19px;
-
             font-weight: bold;
-
             padding-top: 20px;
         }
 
@@ -365,29 +268,17 @@ $userEmail = $_SESSION['user_email'] ?? '';
             color: #c49d4c;
         }
 
-        /* =========================
-           PLACE ORDER
-        ========================= */
 
         .place-order-button {
             width: 100%;
-
             border: none;
-
             background: #c49d4c;
-
             color: #000;
-
             padding: 17px;
-
             margin-top: 25px;
-
             font-weight: bold;
-
             letter-spacing: 1px;
-
             cursor: pointer;
-
             font-size: 13px;
         }
 
@@ -397,17 +288,10 @@ $userEmail = $_SESSION['user_email'] ?? '';
 
         .secure-note {
             text-align: center;
-
             color: #aaa;
-
             font-size: 11px;
-
             margin-top: 15px;
         }
-
-        /* =========================
-           RESPONSIVE
-        ========================= */
 
         @media (max-width: 800px) {
 
@@ -451,11 +335,6 @@ $userEmail = $_SESSION['user_email'] ?? '';
 
 <body>
 
-
-<!-- =========================
-     HEADER
-========================= -->
-
 <header class="checkout-header">
 
     <a
@@ -480,11 +359,6 @@ $userEmail = $_SESSION['user_email'] ?? '';
 
 </header>
 
-
-<!-- =========================
-     MAIN
-========================= -->
-
 <main class="checkout-container">
 
 
@@ -502,11 +376,6 @@ $userEmail = $_SESSION['user_email'] ?? '';
 
 
     <div class="checkout-layout">
-
-
-        <!-- =========================
-             CUSTOMER INFORMATION
-        ========================= -->
 
         <form
             class="checkout-form"
@@ -683,10 +552,6 @@ $userEmail = $_SESSION['user_email'] ?? '';
         </form>
 
 
-        <!-- =========================
-             ORDER SUMMARY
-        ========================= -->
-
         <div class="order-summary">
 
 
@@ -700,9 +565,6 @@ $userEmail = $_SESSION['user_email'] ?? '';
 
                 <?php
 
-                /* =========================
-                   FIX PRODUCT IMAGE PATH
-                ========================= */
 
                 $imagePath = $item['image'];
 
@@ -731,8 +593,6 @@ $userEmail = $_SESSION['user_email'] ?? '';
 
                     </div>
 
-
-                    <!-- PRODUCT DETAILS -->
 
                     <div>
 
