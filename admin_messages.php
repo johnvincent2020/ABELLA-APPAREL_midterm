@@ -1,22 +1,8 @@
-<script>
-document.addEventListener("DOMContentLoaded", function () {
-
-    const conversationBody =
-        document.querySelector(".conversation-body");
-
-    if (conversationBody) {
-
-        conversationBody.scrollTop =
-            conversationBody.scrollHeight;
-
-    }
-
-});
-</script>
 <?php
 
 session_start();
 require_once 'config.php';
+
 if (
     !isset($_SESSION['logged_in']) ||
     $_SESSION['logged_in'] !== true ||
@@ -33,45 +19,130 @@ $selectedUser = isset($_GET['user'])
 
 $replyError = '';
 
-
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+
     $userId = (int)($_POST['user_id'] ?? 0);
     $message = trim($_POST['message'] ?? '');
 
     if ($userId <= 0) {
+
         $replyError = 'Invalid customer.';
+
     } elseif ($message === '') {
+
         $replyError = 'Please enter your message.';
+
     } else {
-        $stmt = $conn->prepare("
-            INSERT INTO messages
-            (user_id, sender, message, is_read)
-            VALUES (?, 'admin', ?, 0)
+
+        $checkCustomer = $conn->prepare("
+            SELECT id
+            FROM users
+            WHERE id = ?
+            AND role = 'user'
+            LIMIT 1
         ");
-        if ($stmt) {
-            $stmt->bind_param(
-                "is",
-                $userId,
-                $message
-            );
-            if ($stmt->execute()) {
-                $stmt->close();
-                header(
-                    "Location: admin_messages.php?user=" .
-                    $userId
-                );
-                exit();
+
+        if ($checkCustomer) {
+
+            $checkCustomer->bind_param("i", $userId);
+            $checkCustomer->execute();
+
+            $customerResult = $checkCustomer->get_result();
+            $customerExists = $customerResult->num_rows > 0;
+
+            $checkCustomer->close();
+
+            if (!$customerExists) {
+
+                $replyError = 'Customer does not exist.';
+
             } else {
-                $replyError =
-                    'Message could not be sent.';
-                $stmt->close();
+
+                $stmt = $conn->prepare("
+                    INSERT INTO messages
+                    (user_id, sender, message, is_read)
+                    VALUES (?, 'admin', ?, 0)
+                ");
+
+                if ($stmt) {
+
+                    $stmt->bind_param(
+                        "is",
+                        $userId,
+                        $message
+                    );
+
+                    if (!$stmt->execute()) {
+                        $replyError = 'Message could not be sent.';
+                    }
+
+                    $stmt->close();
+
+                } else {
+
+                    $replyError = 'Unable to prepare message.';
+                }
             }
+
         } else {
-            $replyError =
-                'Unable to prepare message.';
+
+            $replyError = 'Unable to verify customer.';
         }
     }
+
     $selectedUser = $userId;
+
+    if (
+        isset($_SERVER['HTTP_X_REQUESTED_WITH']) &&
+        strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest'
+    ) {
+
+        header('Content-Type: application/json; charset=utf-8');
+
+        if ($replyError !== '') {
+
+            echo json_encode([
+                'success' => false,
+                'message' => $replyError
+            ]);
+
+        } else {
+
+            $newMessageId = (int)$conn->insert_id;
+
+            $stmt = $conn->prepare("
+                SELECT
+                    id,
+                    sender,
+                    message,
+                    is_read,
+                    created_at
+                FROM messages
+                WHERE id = ?
+                LIMIT 1
+            ");
+
+            $newMessage = null;
+
+            if ($stmt) {
+
+                $stmt->bind_param("i", $newMessageId);
+                $stmt->execute();
+
+                $result = $stmt->get_result();
+                $newMessage = $result->fetch_assoc();
+
+                $stmt->close();
+            }
+
+            echo json_encode([
+                'success' => true,
+                'message_data' => $newMessage
+            ]);
+        }
+
+        exit();
+    }
 }
 
 $customers = [];
@@ -86,7 +157,7 @@ $result = $conn->query("
             SELECT message
             FROM messages m2
             WHERE m2.user_id = u.id
-            ORDER BY m2.created_at DESC
+            ORDER BY m2.created_at DESC, m2.id DESC
             LIMIT 1
         ) AS last_message,
 
@@ -94,7 +165,7 @@ $result = $conn->query("
             SELECT created_at
             FROM messages m3
             WHERE m3.user_id = u.id
-            ORDER BY m3.created_at DESC
+            ORDER BY m3.created_at DESC, m3.id DESC
             LIMIT 1
         ) AS last_message_time,
 
@@ -119,11 +190,9 @@ $result = $conn->query("
     ORDER BY last_message_time DESC
 ");
 
-
 if ($result) {
 
     while ($row = $result->fetch_assoc()) {
-
         $customers[] = $row;
     }
 }
@@ -165,7 +234,6 @@ if ($selectedUser > 0) {
         LIMIT 1
     ");
 
-
     if ($stmt) {
 
         $stmt->bind_param(
@@ -183,6 +251,7 @@ if ($selectedUser > 0) {
         $stmt->close();
     }
 }
+
 $conversation = [];
 
 if ($selectedCustomer) {
@@ -196,40 +265,51 @@ if ($selectedCustomer) {
             created_at
         FROM messages
         WHERE user_id = ?
-        ORDER BY created_at ASC
+        ORDER BY created_at ASC, id ASC
     ");
+
     if ($stmt) {
+
         $stmt->bind_param(
             "i",
             $selectedUser
         );
+
         $stmt->execute();
+
         $result = $stmt->get_result();
+
         while ($row = $result->fetch_assoc()) {
             $conversation[] = $row;
         }
+
         $stmt->close();
     }
 }
 
 ?>
-<!DOCTYPE html
+<!DOCTYPE html>
 <html lang="en">
 <head>
+
 <meta charset="UTF-8">
+
 <meta
     name="viewport"
     content="width=device-width, initial-scale=1.0"
 >
+
 <title>
     Messages - Abella Apparel Admin
 </title>
+
 <style>
 * {
     box-sizing: border-box;
     margin: 0;
     padding: 0;
 }
+
 body {
     font-family:
         Arial,
@@ -238,9 +318,11 @@ body {
     background: #000;
     color: #fff;
 }
+
 a {
     text-decoration: none;
 }
+
 .sidebar {
     width: 250px;
     background: #111;
@@ -253,12 +335,14 @@ a {
     z-index: 20;
     border-right: 1px solid #292929;
 }
+
 .brand {
     padding: 0 12px 35px;
     display: flex;
     align-items: center;
     height: 70px;
 }
+
 .brand img {
     display: block;
     width: 150px;
@@ -267,17 +351,20 @@ a {
     object-fit: contain;
     object-position: left center;
 }
+
 .menu-title {
     color: #888;
     font-size: 10px;
     letter-spacing: 2px;
     margin: 0 12px 12px;
 }
+
 .nav-menu {
     display: flex;
     flex-direction: column;
     gap: 5px;
 }
+
 .nav-menu a {
     display: flex;
     align-items: center;
@@ -287,21 +374,25 @@ a {
     font-size: 13px;
     transition: 0.2s ease;
 }
+
 .nav-menu a:hover {
     background: #1d1d1d;
     color: #fff;
 }
+
 .nav-menu a.active {
     background: #c49d4c;
     color: #111;
     font-weight: 700;
 }
+
 .logout-link {
     position: absolute;
     left: 20px;
     right: 20px;
     bottom: 25px;
 }
+
 .logout-link a {
     display: block;
     padding: 13px;
@@ -310,10 +401,12 @@ a {
     color: #aaa;
     font-size: 12px;
 }
+
 .logout-link a:hover {
     border-color: #c49d4c;
     color: #c49d4c;
 }
+
 .main {
     margin-left: 250px;
     min-height: 100vh;
@@ -321,21 +414,25 @@ a {
     color: #fff;
     padding: 30px;
 }
+
 .topbar {
     display: flex;
     justify-content: space-between;
     align-items: center;
     margin-bottom: 30px;
 }
+
 .page-title h1 {
     font-size: 28px;
     font-weight: 800;
 }
+
 .page-title p {
     color: #888;
     font-size: 13px;
     margin-top: 5px;
 }
+
 .back-btn {
     display: inline-block;
     padding: 10px 16px;
@@ -345,10 +442,12 @@ a {
     font-size: 12px;
     transition: 0.2s ease;
 }
+
 .back-btn:hover {
     border-color: #c49d4c;
     color: #c49d4c;
 }
+
 .messages-container {
     display: grid;
     grid-template-columns: 320px 1fr;
@@ -356,15 +455,18 @@ a {
     height: calc(100vh - 130px);
     min-height: 500px;
 }
+
 .panel {
     background: #111;
     border: 1px solid #292929;
     overflow: hidden;
 }
+
 .customer-list {
     height: 100%;
     overflow-y: auto;
 }
+
 .customer-list-header {
     padding: 20px;
     border-bottom: 1px solid #292929;
@@ -373,6 +475,7 @@ a {
     font-weight: 700;
     letter-spacing: 1.5px;
 }
+
 .customer-item {
     display: block;
     padding: 18px;
@@ -380,23 +483,28 @@ a {
     color: #fff;
     transition: 0.2s ease;
 }
+
 .customer-item:hover {
     background: #181818;
 }
+
 .customer-item.active {
     background: #1c1c1c;
     border-left: 3px solid #c49d4c;
 }
+
 .customer-name {
     font-size: 13px;
     font-weight: 700;
     margin-bottom: 5px;
 }
+
 .customer-email {
     font-size: 10px;
     color: #777;
     margin-bottom: 10px;
 }
+
 .last-message {
     color: #999;
     font-size: 11px;
@@ -404,6 +512,7 @@ a {
     overflow: hidden;
     text-overflow: ellipsis;
 }
+
 .unread-badge {
     float: right;
     min-width: 20px;
@@ -418,24 +527,29 @@ a {
     font-weight: 700;
     border-radius: 50%;
 }
+
 .conversation {
     height: 100%;
     display: flex;
     flex-direction: column;
 }
+
 .conversation-header {
     padding: 20px;
     border-bottom: 1px solid #292929;
     background: #111;
 }
+
 .conversation-header h2 {
     font-size: 17px;
     margin-bottom: 5px;
 }
+
 .conversation-header p {
     color: #777;
     font-size: 11px;
 }
+
 .conversation-body {
     flex: 1;
     padding: 25px;
@@ -444,20 +558,24 @@ a {
     flex-direction: column;
     gap: 15px;
 }
+
 .message-bubble {
     max-width: 75%;
     padding: 14px 16px;
     border: 1px solid #292929;
 }
+
 .customer-message {
     align-self: flex-start;
     background: #181818;
 }
+
 .admin-message {
     align-self: flex-end;
     background: #000;
     border-color: #c49d4c;
 }
+
 .message-sender {
     color: #c49d4c;
     font-size: 9px;
@@ -465,26 +583,31 @@ a {
     letter-spacing: 1.5px;
     margin-bottom: 7px;
 }
+
 .message-text {
     color: #ddd;
     font-size: 12px;
     line-height: 1.7;
     word-break: break-word;
 }
+
 .message-time {
     color: #555;
     font-size: 9px;
     margin-top: 8px;
 }
+
 .reply-area {
     padding: 18px;
     border-top: 1px solid #292929;
     background: #111;
 }
+
 .reply-form {
     display: flex;
     gap: 10px;
 }
+
 .reply-form textarea {
     flex: 1;
     height: 70px;
@@ -500,9 +623,11 @@ a {
         sans-serif;
     font-size: 12px;
 }
+
 .reply-form textarea:focus {
     border-color: #c49d4c;
 }
+
 .reply-button {
     width: 110px;
     border: none;
@@ -513,14 +638,17 @@ a {
     letter-spacing: 1px;
     cursor: pointer;
 }
+
 .reply-button:hover {
     background: #fff;
 }
+
 .error-message {
     color: #d88b8b;
     font-size: 11px;
     margin-bottom: 10px;
 }
+
 .empty {
     height: 100%;
     display: flex;
@@ -531,257 +659,792 @@ a {
     text-align: center;
     padding: 30px;
 }
+
 @media (max-width: 900px) {
+
     .main {
         margin-left: 0;
     }
+
     .sidebar {
         position: relative;
         width: 100%;
         height: auto;
     }
+
     .messages-container {
         grid-template-columns: 1fr;
         height: auto;
     }
+
     .customer-list {
         max-height: 300px;
     }
 }
+
 @media (max-width: 600px) {
+
     .main {
         padding: 20px;
     }
+
     .topbar {
         flex-direction: column;
         align-items: flex-start;
         gap: 15px;
     }
+
     .reply-form {
         flex-direction: column;
     }
+
     .reply-button {
         width: 100%;
         height: 45px;
     }
+
     .message-bubble {
         max-width: 90%;
     }
 }
 </style>
+
 </head>
+
 <body>
+
 <aside class="sidebar">
+
     <div class="brand">
         <img
             src="assets/header-logo.png"
             alt="Abella Apparel"
         >
     </div>
+
     <div class="menu-title">
         MAIN MENU
     </div>
+
     <nav class="nav-menu">
+
         <a href="admin_page.php">
             Dashboard
         </a>
+
         <a href="admin_orders.php">
             Orders
         </a>
+
         <a href="admin_customers.php">
             Customers
         </a>
+
         <a href="admin_products.php">
             Products
         </a>
+
         <a href="admin_stock.php">
             Stock
         </a>
+
         <a
             href="admin_messages.php"
             class="active"
         >
             Messages
         </a>
+        <a href="admin_reviews.php">
+         Reviews
+        </a>
         <a href="admin_subscribers.php">
             Subscribers
         </a>
+
         <a
             href="index.php"
             target="_blank"
         >
             View Store
         </a>
+
     </nav>
+
     <div class="logout-link">
+
         <a href="logout.php">
             LOGOUT
         </a>
+
     </div>
+
 </aside>
+
 <main class="main">
+
     <div class="topbar">
+
         <div class="page-title">
+
             <h1>
                 Messages
             </h1>
+
             <p>
                 Manage your customer conversations.
             </p>
+
         </div>
-        <a
-            href="admin_page.php"
-            class="back-btn"
-        >
-            BACK TO DASHBOARD
-        </a>
+
+        <a href="javascript:history.back()" class="back-btn">
+    BACK
+</a>
     </div>
+
     <div class="messages-container">
+
         <div class="panel customer-list">
+
             <div class="customer-list-header">
                 CUSTOMER MESSAGES
             </div>
+
             <?php if (!empty($customers)): ?>
-                <?php foreach (
-                    $customers
-                    as $customer
-                ): ?>
+
+                <?php foreach ($customers as $customer): ?>
+
                     <a
-                        href="admin_messages.php?user=<?=
-                            (int)$customer['id']
-                        ?>"
-                        class="customer-item
-                        <?=
-                            $selectedUser ===
-                            (int)$customer['id']
-                            ? 'active'
-                            : ''
-                        ?>"
+                        href="admin_messages.php?user=<?= (int)$customer['id'] ?>"
+                        class="customer-item <?= $selectedUser === (int)$customer['id'] ? 'active' : '' ?>"
+                        data-customer-id="<?= (int)$customer['id'] ?>"
                     >
-                        <?php if (
-                            (int)$customer['unread_count'] > 0
-                        ): ?>
+
+                        <?php if ((int)$customer['unread_count'] > 0): ?>
+
                             <span class="unread-badge">
-                                <?=
-                                    (int)
-                                    $customer['unread_count']
-                                ?>
+                                <?= (int)$customer['unread_count'] ?>
                             </span>
+
                         <?php endif; ?>
+
                         <div class="customer-name">
-                            <?= htmlspecialchars(
-                                $customer['name']
-                            ) ?>
+                            <?= htmlspecialchars($customer['name']) ?>
                         </div>
+
                         <div class="customer-email">
-                            <?= htmlspecialchars(
-                                $customer['email']
-                            ) ?>
+                            <?= htmlspecialchars($customer['email']) ?>
                         </div>
+
                         <div class="last-message">
-                            <?= htmlspecialchars(
-                                $customer['last_message']
-                            ) ?>
+                            <?= htmlspecialchars($customer['last_message']) ?>
                         </div>
+
                     </a>
+
                 <?php endforeach; ?>
+
             <?php else: ?>
+
                 <div class="empty">
                     No customer messages yet.
                 </div>
+
             <?php endif; ?>
+
         </div>
+
         <div class="panel conversation">
+
             <?php if ($selectedCustomer): ?>
+
                 <div class="conversation-header">
+
                     <h2>
-                        <?= htmlspecialchars(
-                            $selectedCustomer['name']
-                        ) ?>
+                        <?= htmlspecialchars($selectedCustomer['name']) ?>
                     </h2>
+
                     <p>
-                        <?= htmlspecialchars(
-                            $selectedCustomer['email']
-                        ) ?>
+                        <?= htmlspecialchars($selectedCustomer['email']) ?>
                     </p>
+
                 </div>
-                <div class="conversation-body">
+
+                <div
+                    class="conversation-body"
+                    id="conversationBody"
+                    data-user-id="<?= $selectedUser ?>"
+                >
+
                     <?php if (!empty($conversation)): ?>
-                        <?php foreach (
-                            $conversation
-                            as $msg
-                        ): ?>
+
+                        <?php foreach ($conversation as $msg): ?>
+
                             <div
-                                class="message-bubble
-                                <?= $msg['sender'] === 'customer'
-                                    ? 'customer-message'
-                                    : 'admin-message' ?>"
+                                class="message-bubble <?= $msg['sender'] === 'customer' ? 'customer-message' : 'admin-message' ?>"
+                                data-message-id="<?= (int)$msg['id'] ?>"
                             >
+
                                 <div class="message-sender">
                                     <?= $msg['sender'] === 'customer'
                                         ? 'CUSTOMER'
                                         : 'ABELLA APPAREL' ?>
                                 </div>
+
                                 <div class="message-text">
-                                    <?= nl2br(
-                                        htmlspecialchars(
-                                            $msg['message']
-                                        )
-                                    ) ?>
+                                    <?= nl2br(htmlspecialchars($msg['message'])) ?>
                                 </div>
+
                                 <div class="message-time">
                                     <?= date(
                                         'M d, Y • h:i A',
-                                        strtotime(
-                                            $msg['created_at']
-                                        )
+                                        strtotime($msg['created_at'])
                                     ) ?>
                                 </div>
+
                             </div>
+
                         <?php endforeach; ?>
+
                     <?php else: ?>
-                        <div class="empty">
+
+                        <div
+                            class="empty"
+                            id="emptyConversation"
+                        >
                             No messages in this conversation.
                         </div>
+
                     <?php endif; ?>
+
                 </div>
+
                 <div class="reply-area">
+
                     <?php if ($replyError): ?>
+
                         <div class="error-message">
-                            <?= htmlspecialchars(
-                                $replyError
-                            ) ?>
+                            <?= htmlspecialchars($replyError) ?>
                         </div>
+
                     <?php endif; ?>
+
                     <form
                         method="POST"
                         class="reply-form"
+                        id="replyForm"
                     >
+
                         <input
                             type="hidden"
                             name="user_id"
                             value="<?= $selectedUser ?>"
                         >
+
                         <textarea
                             name="message"
+                            id="replyMessage"
                             placeholder="Write your reply..."
                             required
                         ></textarea>
+
                         <button
                             type="submit"
                             class="reply-button"
+                            id="replyButton"
                         >
                             SEND REPLY
                         </button>
+
                     </form>
+
                 </div>
+
             <?php else: ?>
+
                 <div class="empty">
                     Select a customer to view their conversation.
                 </div>
+
             <?php endif; ?>
+
         </div>
+
     </div>
+
 </main>
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+
+    const conversationBody =
+        document.getElementById("conversationBody");
+
+    const replyForm =
+        document.getElementById("replyForm");
+
+    const replyMessage =
+        document.getElementById("replyMessage");
+
+    const replyButton =
+        document.getElementById("replyButton");
+
+    if (!conversationBody) {
+        return;
+    }
+
+    const currentUserId =
+        parseInt(
+            conversationBody.dataset.userId || "0",
+            10
+        );
+
+    let latestMessageId = 0;
+
+    const existingMessages =
+        conversationBody.querySelectorAll(
+            ".message-bubble[data-message-id]"
+        );
+
+    existingMessages.forEach(function (message) {
+
+        const id =
+            parseInt(
+                message.dataset.messageId || "0",
+                10
+            );
+
+        if (id > latestMessageId) {
+            latestMessageId = id;
+        }
+
+    });
+
+    conversationBody.scrollTop =
+        conversationBody.scrollHeight;
+
+    function escapeHtml(text) {
+
+        const div =
+            document.createElement("div");
+
+        div.textContent =
+            text == null ? "" : String(text);
+
+        return div.innerHTML;
+    }
+
+    function formatMessageTime(createdAt) {
+
+        if (!createdAt) {
+            return "";
+        }
+
+        const date =
+            new Date(
+                createdAt.replace(" ", "T")
+            );
+
+        if (isNaN(date.getTime())) {
+            return createdAt;
+        }
+
+        return date.toLocaleDateString(
+            "en-US",
+            {
+                month: "short",
+                day: "2-digit",
+                year: "numeric"
+            }
+        ) + " • " +
+        date.toLocaleTimeString(
+            "en-US",
+            {
+                hour: "2-digit",
+                minute: "2-digit"
+            }
+        );
+    }
+
+    function addMessage(message, forceScroll) {
+
+        if (!message || !message.id) {
+            return;
+        }
+
+        const messageId =
+            parseInt(message.id, 10);
+
+        if (
+            conversationBody.querySelector(
+                '[data-message-id="' +
+                messageId +
+                '"]'
+            )
+        ) {
+            return;
+        }
+
+        const emptyConversation =
+            document.getElementById(
+                "emptyConversation"
+            );
+
+        if (emptyConversation) {
+            emptyConversation.remove();
+        }
+
+        const bubble =
+            document.createElement("div");
+
+        bubble.className =
+            "message-bubble " +
+            (
+                message.sender === "customer"
+                    ? "customer-message"
+                    : "admin-message"
+            );
+
+        bubble.dataset.messageId =
+            messageId;
+
+        bubble.innerHTML =
+            '<div class="message-sender">' +
+                (
+                    message.sender === "customer"
+                        ? "CUSTOMER"
+                        : "ABELLA APPAREL"
+                ) +
+            '</div>' +
+
+            '<div class="message-text">' +
+                escapeHtml(message.message)
+                    .replace(/\n/g, "<br>") +
+            '</div>' +
+
+            '<div class="message-time">' +
+                formatMessageTime(
+                    message.created_at
+                ) +
+            '</div>';
+
+        conversationBody.appendChild(
+            bubble
+        );
+
+        if (messageId > latestMessageId) {
+            latestMessageId = messageId;
+        }
+
+        if (forceScroll) {
+
+            conversationBody.scrollTop =
+                conversationBody.scrollHeight;
+        }
+    }
+
+    function pollMessages() {
+
+        if (currentUserId <= 0) {
+            return;
+        }
+
+        fetch(
+            "messages_poll.php?user_id=" +
+            encodeURIComponent(currentUserId) +
+            "&after_id=" +
+            encodeURIComponent(latestMessageId),
+            {
+                method: "GET",
+                cache: "no-store",
+                headers: {
+                    "X-Requested-With":
+                        "XMLHttpRequest"
+                }
+            }
+        )
+        .then(function (response) {
+            return response.json();
+        })
+        .then(function (data) {
+
+            if (
+                !data ||
+                data.success !== true
+            ) {
+                return;
+            }
+
+            const distanceFromBottom =
+                conversationBody.scrollHeight -
+                conversationBody.scrollTop -
+                conversationBody.clientHeight;
+
+            const wasNearBottom =
+                distanceFromBottom < 120;
+
+            if (
+                Array.isArray(data.messages)
+            ) {
+
+                data.messages.forEach(
+                    function (message) {
+
+                        addMessage(
+                            message,
+                            false
+                        );
+
+                    }
+                );
+
+                if (
+                    data.messages.length > 0 &&
+                    wasNearBottom
+                ) {
+
+                    conversationBody.scrollTop =
+                        conversationBody.scrollHeight;
+                }
+            }
+
+            if (
+                Array.isArray(
+                    data.customer_read_ids
+                )
+            ) {
+
+                data.customer_read_ids.forEach(
+                    function (id) {
+
+                        const messageElement =
+                            conversationBody.querySelector(
+                                '[data-message-id="' +
+                                parseInt(id, 10) +
+                                '"]'
+                            );
+
+                        if (messageElement) {
+                            messageElement.dataset.read =
+                                "1";
+                        }
+
+                    }
+                );
+            }
+
+            if (
+                Array.isArray(data.customers)
+            ) {
+
+                data.customers.forEach(
+                    function (customer) {
+
+                        const customerItem =
+                            document.querySelector(
+                                '[data-customer-id="' +
+                                parseInt(customer.id, 10) +
+                                '"]'
+                            );
+
+                        if (!customerItem) {
+                            return;
+                        }
+
+                        const oldBadge =
+                            customerItem.querySelector(
+                                ".unread-badge"
+                            );
+
+                        const unreadCount =
+                            parseInt(
+                                customer.unread_count || 0,
+                                10
+                            );
+
+                        if (unreadCount > 0) {
+
+                            if (oldBadge) {
+
+                                oldBadge.textContent =
+                                    unreadCount;
+
+                            } else {
+
+                                const badge =
+                                    document.createElement(
+                                        "span"
+                                    );
+
+                                badge.className =
+                                    "unread-badge";
+
+                                badge.textContent =
+                                    unreadCount;
+
+                                customerItem.prepend(
+                                    badge
+                                );
+                            }
+
+                        } else if (oldBadge) {
+
+                            oldBadge.remove();
+                        }
+
+                        const lastMessage =
+                            customerItem.querySelector(
+                                ".last-message"
+                            );
+
+                        if (
+                            lastMessage &&
+                            customer.last_message !== null
+                        ) {
+
+                            lastMessage.textContent =
+                                customer.last_message;
+                        }
+
+                    }
+                );
+            }
+
+        })
+        .catch(function () {
+
+        });
+    }
+
+    if (replyForm) {
+
+        replyForm.addEventListener(
+            "submit",
+            function (event) {
+
+                event.preventDefault();
+
+                const message =
+                    replyMessage.value.trim();
+
+                if (!message) {
+                    return;
+                }
+
+                replyButton.disabled = true;
+                replyButton.textContent = "SENDING...";
+
+                const formData =
+                    new FormData(replyForm);
+
+                fetch(
+                    "admin_messages.php?user=" +
+                    encodeURIComponent(currentUserId),
+                    {
+                        method: "POST",
+                        body: formData,
+                        headers: {
+                            "X-Requested-With":
+                                "XMLHttpRequest"
+                        }
+                    }
+                )
+                .then(function (response) {
+                    return response.json();
+                })
+                .then(function (data) {
+
+                    if (
+                        data &&
+                        data.success === true
+                    ) {
+
+                        if (
+                            data.message_data
+                        ) {
+
+                            addMessage(
+                                data.message_data,
+                                true
+                            );
+                        }
+
+                        replyMessage.value = "";
+
+                        replyMessage.style.height =
+                            "70px";
+
+                    } else {
+
+                        alert(
+                            data && data.message
+                                ? data.message
+                                : "Message could not be sent."
+                        );
+                    }
+
+                })
+                .catch(function () {
+
+                    alert(
+                        "Message could not be sent."
+                    );
+
+                })
+                .finally(function () {
+
+                    replyButton.disabled =
+                        false;
+
+                    replyButton.textContent =
+                        "SEND REPLY";
+                });
+
+            }
+        );
+
+        replyMessage.addEventListener(
+            "keydown",
+            function (event) {
+
+                if (
+                    event.key === "Enter" &&
+                    !event.shiftKey
+                ) {
+
+                    event.preventDefault();
+
+                    replyForm.requestSubmit();
+                }
+
+            }
+        );
+
+        replyMessage.addEventListener(
+            "input",
+            function () {
+
+                this.style.height =
+                    "70px";
+
+                this.style.height =
+                    Math.min(
+                        this.scrollHeight,
+                        150
+                    ) + "px";
+
+            }
+        );
+    }
+
+    pollMessages();
+
+    setInterval(
+        pollMessages,
+        2000
+    );
+
+});
+</script>
+
 </body>
 </html>

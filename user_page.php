@@ -4,7 +4,6 @@ session_start();
 
 require_once 'config.php';
 
-
 if (
     !isset($_SESSION['logged_in']) ||
     $_SESSION['logged_in'] !== true ||
@@ -18,8 +17,6 @@ if (
 
 $userId = (int) $_SESSION['user_id'];
 
-
-
 $cartCount = 0;
 
 if (isset($_SESSION['cart']) && is_array($_SESSION['cart'])) {
@@ -27,9 +24,6 @@ if (isset($_SESSION['cart']) && is_array($_SESSION['cart'])) {
         $cartCount += (int) ($item['quantity'] ?? 0);
     }
 }
-
-
-
 
 $user = [
     'name' => '',
@@ -55,31 +49,10 @@ if ($result && $result->num_rows > 0) {
 
 $stmt->close();
 
+$flashSuccess = $_SESSION['flash_success'] ?? '';
+$flashError = $_SESSION['flash_error'] ?? '';
 
-
-$isSubscribed = false;
-
-if (!empty($user['email'])) {
-
-    $subStmt = $conn->prepare("
-        SELECT id
-        FROM subscribers
-        WHERE email = ?
-        LIMIT 1
-    ");
-
-    $subStmt->bind_param("s", $user['email']);
-    $subStmt->execute();
-
-    $subResult = $subStmt->get_result();
-
-    $isSubscribed = $subResult->num_rows > 0;
-
-    $subStmt->close();
-}
-
-$flashSuccess = '';
-$flashError = '';
+unset($_SESSION['flash_success'], $_SESSION['flash_error']);
 
 if (
     $_SERVER['REQUEST_METHOD'] === 'POST' &&
@@ -136,7 +109,7 @@ if (
                 } else {
 
                     $uploadDir =
-                        'assets/profiles/';
+                        '../ABELLA-APPAREL/assets/profiles/';
 
                     if (!is_dir($uploadDir)) {
                         mkdir($uploadDir, 0755, true);
@@ -167,12 +140,10 @@ if (
                         )
                     ) {
 
-                        /* Delete previous profile photo */
-
                         if (!empty($user['profile_photo'])) {
 
                             $oldFile =
-                                'assets/profiles/' .
+                                '../ABELLA-APPAREL/assets/profiles/' .
                                 basename($user['profile_photo']);
 
                             if (file_exists($oldFile)) {
@@ -190,7 +161,6 @@ if (
                 }
             }
         }
-
 
         if ($flashError === '') {
 
@@ -231,14 +201,181 @@ if (
     }
 }
 
-
 $profilePhotoPath = '';
 
 if (!empty($user['profile_photo'])) {
 
     $profilePhotoPath =
-        'assets/profiles/' .
+        '../ABELLA-APPAREL/assets/profiles/' .
         basename($user['profile_photo']);
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['order_action'])) {
+
+    $orderAction = $_POST['order_action'];
+    $orderId = (int) ($_POST['order_id'] ?? 0);
+
+    if ($orderId <= 0) {
+        $flashError = 'Invalid order.';
+    } elseif ($orderAction === 'received') {
+
+        $stmt = $conn->prepare("
+            UPDATE orders
+            SET received_at = NOW()
+            WHERE id = ?
+              AND user_id = ?
+              AND status = 'Delivered'
+              AND received_at IS NULL
+        ");
+
+        if ($stmt) {
+            $stmt->bind_param("ii", $orderId, $userId);
+            $stmt->execute();
+
+            if ($stmt->affected_rows > 0) {
+                $flashSuccess = 'Order marked as received.';
+            } else {
+                $flashError = 'This order cannot be marked as received.';
+            }
+
+            $stmt->close();
+        } else {
+            $flashError = 'Unable to update the order.';
+        }
+
+    } elseif ($orderAction === 'review') {
+
+        $productId = (int) ($_POST['product_id'] ?? 0);
+        $rating = (int) ($_POST['rating'] ?? 0);
+        $reviewText = trim($_POST['review'] ?? '');
+
+        if ($productId <= 0) {
+            $flashError = 'Please select a product to review.';
+        } elseif ($rating < 1 || $rating > 5) {
+            $flashError = 'Please select a rating from 1 to 5 stars.';
+        } else {
+
+            $checkStmt = $conn->prepare("
+                SELECT id
+                FROM orders
+                WHERE id = ?
+                  AND user_id = ?
+                  AND status = 'Delivered'
+                  AND received_at IS NOT NULL
+                LIMIT 1
+            ");
+
+            $canReview = false;
+
+            if ($checkStmt) {
+                $checkStmt->bind_param("ii", $orderId, $userId);
+                $checkStmt->execute();
+                $checkResult = $checkStmt->get_result();
+                $canReview = $checkResult && $checkResult->num_rows > 0;
+                $checkStmt->close();
+            }
+
+            if (!$canReview) {
+                $flashError = 'You can only review an order after receiving it.';
+            } else {
+
+                $checkProduct = $conn->prepare("
+                    SELECT oi.product_name
+                    FROM order_items oi
+                    LEFT JOIN products p ON oi.product_name = p.name
+                    WHERE oi.order_id = ?
+                      AND p.id = ?
+                    LIMIT 1
+                ");
+
+                $productInOrder = false;
+
+                if ($checkProduct) {
+                    $checkProduct->bind_param("ii", $orderId, $productId);
+                    $checkProduct->execute();
+                    $productResult = $checkProduct->get_result();
+                    $productInOrder = $productResult && $productResult->num_rows > 0;
+                    $checkProduct->close();
+                }
+
+                if (!$productInOrder) {
+                    $flashError = 'The selected product is not part of this order.';
+                } else {
+
+                    $checkReview = $conn->prepare("
+                        SELECT id
+                        FROM reviews
+                        WHERE order_id = ?
+                          AND product_id = ?
+                        LIMIT 1
+                    ");
+
+                    $alreadyReviewed = false;
+
+                    if ($checkReview) {
+                        $checkReview->bind_param("ii", $orderId, $productId);
+                        $checkReview->execute();
+                        $reviewResult = $checkReview->get_result();
+                        $alreadyReviewed = $reviewResult && $reviewResult->num_rows > 0;
+                        $checkReview->close();
+                    }
+
+                    if ($alreadyReviewed) {
+                        $flashError = 'You have already reviewed this product in this order.';
+                    } else {
+
+                        $insertReview = $conn->prepare("
+                            INSERT INTO reviews
+                                (order_id, user_id, product_id, rating, review)
+                            VALUES
+                                (?, ?, ?, ?, ?)
+                        ");
+
+                        if ($insertReview) {
+                            $insertReview->bind_param(
+                                "iiiis",
+                                $orderId,
+                                $userId,
+                                $productId,
+                                $rating,
+                                $reviewText
+                            );
+
+                            if ($insertReview->execute()) {
+                                $flashSuccess = 'Thank you for your review.';
+                            } else {
+                                $flashError = 'Unable to submit your review.';
+                            }
+
+                            $insertReview->close();
+                        } else {
+                            $flashError = 'Unable to submit your review.';
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+
+if (
+    $_SERVER['REQUEST_METHOD'] === 'POST' &&
+    (
+        isset($_POST['update_account']) ||
+        isset($_POST['order_action'])
+    )
+) {
+    if ($flashSuccess !== '') {
+        $_SESSION['flash_success'] = $flashSuccess;
+    }
+
+    if ($flashError !== '') {
+        $_SESSION['flash_error'] = $flashError;
+    }
+
+    header("Location: user_page.php");
+    exit();
 }
 
 $orders = [];
@@ -255,7 +392,8 @@ $stmt = $conn->prepare("
         payment_method,
         total_amount,
         status,
-        created_at
+        created_at,
+        received_at
     FROM orders
     WHERE user_id = ?
     ORDER BY created_at DESC
@@ -275,7 +413,6 @@ if ($result) {
 
 $stmt->close();
 
-
 function getUserOrderItems($conn, $orderId)
 {
     $items = [];
@@ -286,6 +423,7 @@ function getUserOrderItems($conn, $orderId)
             oi.product_price,
             oi.quantity,
             oi.subtotal,
+            p.id AS product_id,
             p.image
         FROM order_items oi
         LEFT JOIN products p
@@ -310,6 +448,36 @@ function getUserOrderItems($conn, $orderId)
     return $items;
 }
 
+function getUserOrderReviews($conn, $orderId)
+{
+    $reviews = [];
+
+    $stmt = $conn->prepare("
+        SELECT id, product_id, rating, review, created_at
+        FROM reviews
+        WHERE order_id = ?
+        ORDER BY created_at ASC, id ASC
+    ");
+
+    if (!$stmt) {
+        return $reviews;
+    }
+
+    $stmt->bind_param("i", $orderId);
+    $stmt->execute();
+
+    $result = $stmt->get_result();
+
+    if ($result) {
+        while ($row = $result->fetch_assoc()) {
+            $reviews[(int)$row['product_id']] = $row;
+        }
+    }
+
+    $stmt->close();
+
+    return $reviews;
+}
 
 $totalOrders = count($orders);
 $totalSpent = 0;
@@ -356,7 +524,6 @@ function e($value)
     );
 }
 
-
 function statusClass($status)
 {
     switch (strtolower($status)) {
@@ -374,7 +541,6 @@ function statusClass($status)
             return 'status-pending';
     }
 }
-
 
 function statusNumber($status)
 {
@@ -394,6 +560,26 @@ function statusNumber($status)
 
         default:
             return 1;
+    }
+}
+
+
+$reviewProducts = [];
+
+foreach ($orders as $order) {
+    $orderIdForProducts = (int)$order['id'];
+    $orderItemsForReview = getUserOrderItems($conn, $orderIdForProducts);
+    $reviewProducts[$orderIdForProducts] = [];
+
+    foreach ($orderItemsForReview as $item) {
+        $pid = (int)($item['product_id'] ?? 0);
+        if ($pid > 0) {
+            $reviewProducts[$orderIdForProducts][] = [
+                'id' => $pid,
+                'name' => $item['product_name'],
+                'image' => $item['image'] ?? ''
+            ];
+        }
     }
 }
 
@@ -431,11 +617,14 @@ function statusNumber($status)
 
     <link
         rel="stylesheet"
-        href="style.css?v=<?php echo time(); ?>"
+        href="../ABELLA-APPAREL/style.css?v=<?php echo time(); ?>"
     >
 
-
 <style>
+
+/* =====================================================
+   RESET
+===================================================== */
 
 * {
     box-sizing: border-box;
@@ -471,6 +660,9 @@ input {
     font-family: inherit;
 }
 
+/* =====================================================
+   ACCOUNT HERO
+===================================================== */
 
 .account-hero {
     position: relative;
@@ -486,7 +678,7 @@ input {
             rgba(0,0,0,.80) 45%,
             rgba(0,0,0,.45) 100%
         ),
-        url('assets/editorial.png')
+        url('../ABELLA-APPAREL/assets/editorial.png')
         center / cover no-repeat;
 
     border-bottom: 1px solid #1d1d1d;
@@ -530,12 +722,20 @@ input {
     line-height: 1.8;
 }
 
+/* =====================================================
+   ACCOUNT MAIN
+===================================================== */
+
 .account-main {
     width: 100%;
     max-width: 1250px;
     margin: auto;
     padding: 85px 35px;
 }
+
+/* =====================================================
+   PROFILE AREA
+===================================================== */
 
 .profile-section {
     display: grid;
@@ -544,6 +744,9 @@ input {
     margin-bottom: 70px;
 }
 
+/* =====================================================
+   PROFILE CARD
+===================================================== */
 
 .profile-card {
     position: relative;
@@ -617,26 +820,9 @@ input {
 .profile-email {
     color: #777;
     font-size: 12px;
-    margin-bottom: 12px;
+    margin-bottom: 28px;
     word-break: break-word;
     text-align: center;
-}
-
-.newsletter-badge {
-    display: inline-block;
-    margin: 0 auto 24px;
-    padding: 6px 14px;
-    border: 1px solid #333;
-    color: #888;
-    font-size: 10px;
-    font-weight: 700;
-    letter-spacing: 0.5px;
-    text-transform: uppercase;
-}
-
-.newsletter-badge.subscribed {
-    border-color: #c49d4c;
-    color: #c49d4c;
 }
 
 .edit-profile-btn {
@@ -667,6 +853,10 @@ input {
     border-color: #c49d4c;
     color: #000;
 }
+
+/* =====================================================
+   ACCOUNT OVERVIEW
+===================================================== */
 
 .overview {
     background: #111;
@@ -706,6 +896,10 @@ input {
     line-height: 1.8;
     max-width: 650px;
 }
+
+/* =====================================================
+   QUICK LINKS
+===================================================== */
 
 .quick-links {
     display: grid;
@@ -747,6 +941,10 @@ input {
     color: #c49d4c;
 }
 
+/* =====================================================
+   FLASH MESSAGES
+===================================================== */
+
 .flash-message {
     margin-bottom: 25px;
     padding: 15px 18px;
@@ -765,6 +963,10 @@ input {
     border-color: #5c2828;
     color: #ff7777;
 }
+
+/* =====================================================
+   STATISTICS
+===================================================== */
 
 .account-stats {
     display: grid;
@@ -806,6 +1008,10 @@ input {
     color: #c49d4c;
 }
 
+/* =====================================================
+   ORDER HEADER
+===================================================== */
+
 .orders-heading {
     display: flex;
     align-items: flex-end;
@@ -832,12 +1038,19 @@ input {
     letter-spacing: 1px;
 }
 
+/* =====================================================
+   ORDERS
+===================================================== */
+
 .orders-container {
     display: flex;
     flex-direction: column;
     gap: 20px;
 }
 
+/* =====================================================
+   ORDER CARD
+===================================================== */
 
 .order-card {
     background: #111;
@@ -871,6 +1084,9 @@ input {
     font-size: 10px;
 }
 
+/* =====================================================
+   STATUS
+===================================================== */
 
 .order-status {
     display: inline-flex;
@@ -910,6 +1126,9 @@ input {
     background: #102718;
 }
 
+/* =====================================================
+   ORDER PROGRESS
+===================================================== */
 
 .order-progress {
     padding: 23px;
@@ -978,6 +1197,9 @@ input {
     color: #c49d4c;
 }
 
+/* =====================================================
+   CUSTOMER DETAILS
+===================================================== */
 
 .order-details {
     display: grid;
@@ -1005,6 +1227,9 @@ input {
     word-break: break-word;
 }
 
+/* =====================================================
+   PRODUCTS
+===================================================== */
 
 .products-section {
     padding: 22px;
@@ -1090,6 +1315,10 @@ input {
     white-space: nowrap;
 }
 
+/* =====================================================
+   ORDER FOOTER
+===================================================== */
+
 .order-bottom {
     display: flex;
     align-items: center;
@@ -1120,6 +1349,9 @@ input {
     color: #c49d4c;
 }
 
+/* =====================================================
+   EMPTY ORDERS
+===================================================== */
 
 .empty-orders {
     padding: 75px 25px;
@@ -1176,6 +1408,9 @@ input {
     color: #c49d4c;
 }
 
+/* =====================================================
+   ACCOUNT BANNER
+===================================================== */
 
 .account-banner {
     padding: 85px 25px;
@@ -1217,6 +1452,10 @@ input {
     font-size: 12px;
     line-height: 1.8;
 }
+
+/* =====================================================
+   FOOTER
+===================================================== */
 
 .footer {
     background: #000;
@@ -1322,6 +1561,9 @@ input {
     letter-spacing: .7px;
 }
 
+/* =====================================================
+   MODAL
+===================================================== */
 
 .modal-overlay {
     position: fixed;
@@ -1498,6 +1740,162 @@ input {
     border-color: #fff;
 }
 
+/* =====================================================
+   ORDER RECEIVED / REVIEW
+===================================================== */
+
+.order-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 10px;
+    padding: 0 23px 21px;
+}
+
+.order-action-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 12px 18px;
+    border: 1px solid #c49d4c;
+    background: #c49d4c;
+    color: #000;
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 1px;
+    cursor: pointer;
+    transition: background .25s ease, color .25s ease, border-color .25s ease;
+}
+
+.order-action-btn:hover {
+    background: transparent;
+    color: #c49d4c;
+}
+
+.order-action-btn.secondary {
+    background: transparent;
+    color: #c49d4c;
+}
+
+.order-action-btn.secondary:hover {
+    background: #c49d4c;
+    color: #000;
+}
+
+.order-received-label {
+    color: #7edb8a;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1px;
+}
+
+.review-stars {
+    color: #c49d4c;
+    font-size: 14px;
+    letter-spacing: 2px;
+    margin-bottom: 7px;
+}
+
+.review-text {
+    color: #888;
+    font-size: 11px;
+    line-height: 1.7;
+}
+
+.review-date {
+    color: #555;
+    font-size: 9px;
+    margin-top: 7px;
+}
+
+.review-modal .form-group textarea {
+    width: 100%;
+    min-height: 110px;
+    padding: 13px;
+    background: #080808;
+    border: 1px solid #333;
+    color: #fff;
+    font-size: 12px;
+    resize: vertical;
+    outline: none;
+    font-family: inherit;
+}
+
+.review-modal .form-group textarea:focus {
+    border-color: #c49d4c;
+}
+
+.review-product-select {
+    width: 100%;
+    height: 44px;
+    padding: 0 13px;
+    background: #080808;
+    border: 1px solid #333;
+    color: #fff;
+    font-size: 12px;
+    outline: none;
+    cursor: pointer;
+}
+
+.review-product-select:focus {
+    border-color: #c49d4c;
+}
+
+.review-product-preview {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 10px;
+    padding: 10px;
+    background: #181818;
+    border: 1px solid #292929;
+}
+
+.review-product-preview img {
+    width: 48px;
+    height: 48px;
+    object-fit: cover;
+    background: #222;
+    border: 1px solid #333;
+}
+
+.review-product-preview-name {
+    color: #ddd;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: .5px;
+}
+
+.rating-select {
+    display: flex;
+    flex-direction: row-reverse;
+    justify-content: flex-end;
+    gap: 5px;
+}
+
+.rating-select input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.rating-select label {
+    color: #444;
+    font-size: 28px;
+    line-height: 1;
+    cursor: pointer;
+    transition: color .2s ease;
+}
+
+.rating-select label:hover,
+.rating-select label:hover ~ label,
+.rating-select input:checked ~ label {
+    color: #c49d4c;
+}
+
+/* =====================================================
+   RESPONSIVE
+===================================================== */
 
 @media (max-width: 1000px) {
 
@@ -1517,7 +1915,6 @@ input {
         grid-column: 1 / -1;
     }
 }
-
 
 @media (max-width: 760px) {
 
@@ -1575,7 +1972,6 @@ input {
         padding: 50px 20px;
     }
 }
-
 
 @media (max-width: 500px) {
 
@@ -1642,68 +2038,56 @@ input {
 
 </head>
 
-
 <body>
 
 <div class="site">
-
 
 <header class="header">
 
     <div class="header-inner">
 
-        <!-- LOGO -->
-
-        <a href="index.php">
+        <a href="../ABELLA-APPAREL/index.php">
 
             <img
                 class="logo"
-                src="assets/header-logo.png"
+                src="../ABELLA-APPAREL/assets/header-logo.png"
                 alt="Abella Apparel"
             >
 
         </a>
 
-
-        <!-- NAVIGATION -->
-
         <nav class="nav">
 
-            <a href="index.php">
+            <a href="../ABELLA-APPAREL/index.php">
                 HOME
             </a>
 
-            <a href="shop.php">
+            <a href="../ABELLA-APPAREL/shop.php">
                 SHOP
             </a>
 
-            <a href="hoodies.php">
+            <a href="../ABELLA-APPAREL/hoodies.php">
                 HOODIES
             </a>
 
-            <a href="tshirts.php">
+            <a href="../ABELLA-APPAREL/tshirts.php">
                 T-SHIRTS
             </a>
 
-            <a href="about.php">
+            <a href="../ABELLA-APPAREL/about.php">
                 ABOUT
             </a>
 
-            <a href="contact.php">
+            <a href="../ABELLA-APPAREL/contact.php">
                 CONTACT
             </a>
 
         </nav>
 
-
-        <!-- ICONS -->
-
         <div class="icons">
 
-            <!-- SEARCH -->
-
             <a
-                href="search.php"
+                href="../ABELLA-APPAREL/search.php"
                 class="icon"
                 aria-label="Search"
             >
@@ -1732,9 +2116,6 @@ input {
 
             </a>
 
-
-            <!-- ACCOUNT -->
-
             <a
                 href="user_page.php"
                 class="icon"
@@ -1762,11 +2143,8 @@ input {
 
             </a>
 
-
-            <!-- CART -->
-
             <a
-                href="cart.php"
+                href="../ABELLA-APPAREL/cart.php"
                 class="icon cart-icon"
                 aria-label="Cart"
             >
@@ -1800,7 +2178,6 @@ input {
 
                 </svg>
 
-
                 <?php if ($cartCount > 0): ?>
 
                     <span class="cart-count">
@@ -1816,7 +2193,6 @@ input {
     </div>
 
 </header>
-
 
 <section class="account-hero">
 
@@ -1842,9 +2218,7 @@ input {
 
 </section>
 
-
 <main class="account-main">
-
 
 <?php if ($flashSuccess !== ''): ?>
 
@@ -1853,7 +2227,6 @@ input {
     </div>
 
 <?php endif; ?>
-
 
 <?php if ($flashError !== ''): ?>
 
@@ -1865,15 +2238,11 @@ input {
 
 <section class="profile-section">
 
-
-    <!-- PROFILE CARD -->
-
     <div class="profile-card">
 
         <div class="profile-label">
             YOUR PROFILE
         </div>
-
 
         <div class="profile-photo-wrapper">
 
@@ -1915,7 +2284,6 @@ input {
 
         </div>
 
-
         <div class="profile-name">
             <?= e($user['name']) ?>
         </div>
@@ -1923,22 +2291,6 @@ input {
         <div class="profile-email">
             <?= e($user['email']) ?>
         </div>
-
-
-        <?php if ($isSubscribed): ?>
-
-            <div class="newsletter-badge subscribed">
-                ✓ Subscribed to @abellaapparel
-            </div>
-
-        <?php else: ?>
-
-            <div class="newsletter-badge">
-                Not Subscribed to @abellaapparel
-            </div>
-
-        <?php endif; ?>
-
 
         <button
             type="button"
@@ -1949,9 +2301,6 @@ input {
         </button>
 
     </div>
-
-
-    <!-- OVERVIEW -->
 
     <div class="overview">
 
@@ -1972,11 +2321,10 @@ input {
             information and keep track of every order you place.
         </p>
 
-
         <div class="quick-links">
 
             <a
-                href="shop.php"
+                href="../ABELLA-APPAREL/shop.php"
                 class="quick-link"
             >
 
@@ -1989,7 +2337,6 @@ input {
                 </span>
 
             </a>
-
 
             <a
                 href="#orders"
@@ -2005,7 +2352,6 @@ input {
                 </span>
 
             </a>
-
 
             <button
                 type="button"
@@ -2023,7 +2369,6 @@ input {
                 </span>
 
             </button>
-
 
             <a
                 href="logout.php"
@@ -2048,7 +2393,6 @@ input {
 
 <section class="account-stats">
 
-
     <div class="account-stat">
 
         <div class="stat-title">
@@ -2061,7 +2405,6 @@ input {
 
     </div>
 
-
     <div class="account-stat">
 
         <div class="stat-title">
@@ -2073,7 +2416,6 @@ input {
         </div>
 
     </div>
-
 
     <div class="account-stat">
 
@@ -2101,7 +2443,6 @@ input {
 
 <section id="orders">
 
-
     <div class="orders-heading">
 
         <div>
@@ -2116,7 +2457,6 @@ input {
 
         </div>
 
-
         <div class="orders-count">
 
             <?= $totalOrders ?>
@@ -2127,9 +2467,7 @@ input {
 
     </div>
 
-
 <?php if (empty($orders)): ?>
-
 
     <div class="empty-orders">
 
@@ -2146,7 +2484,7 @@ input {
         </p>
 
         <a
-            href="shop.php"
+            href="../ABELLA-APPAREL/shop.php"
             class="shop-btn"
         >
             START SHOPPING
@@ -2154,12 +2492,9 @@ input {
 
     </div>
 
-
 <?php else: ?>
 
-
     <div class="orders-container">
-
 
     <?php foreach ($orders as $order): ?>
 
@@ -2176,11 +2511,7 @@ input {
 
         ?>
 
-
         <article class="order-card">
-
-
-            <!-- ORDER TOP -->
 
             <div class="order-top">
 
@@ -2201,7 +2532,6 @@ input {
 
                 </div>
 
-
                 <div
                     class="order-status <?= statusClass($order['status']) ?>"
                 >
@@ -2210,13 +2540,9 @@ input {
 
             </div>
 
-
-            <!-- PROGRESS -->
-
             <div class="order-progress">
 
                 <div class="progress-line">
-
 
                     <div
                         class="progress-step
@@ -2232,7 +2558,6 @@ input {
 
                     </div>
 
-
                     <div
                         class="progress-step
                         <?= $currentStep >= 2 ? 'active' : '' ?>
@@ -2246,7 +2571,6 @@ input {
                         </div>
 
                     </div>
-
 
                     <div
                         class="progress-step
@@ -2262,7 +2586,6 @@ input {
 
                     </div>
 
-
                     <div
                         class="progress-step
                         <?= $currentStep >= 4 ? 'active' : '' ?>
@@ -2277,16 +2600,11 @@ input {
 
                     </div>
 
-
                 </div>
 
             </div>
 
-
-            <!-- CUSTOMER DETAILS -->
-
             <div class="order-details">
-
 
                 <div>
 
@@ -2300,7 +2618,6 @@ input {
 
                 </div>
 
-
                 <div>
 
                     <div class="detail-title">
@@ -2313,7 +2630,6 @@ input {
 
                 </div>
 
-
                 <div>
 
                     <div class="detail-title">
@@ -2325,7 +2641,6 @@ input {
                     </div>
 
                 </div>
-
 
                 <div>
 
@@ -2353,7 +2668,6 @@ input {
 
                 </div>
 
-
                 <div>
 
                     <div class="detail-title">
@@ -2365,7 +2679,6 @@ input {
                     </div>
 
                 </div>
-
 
                 <div>
 
@@ -2379,11 +2692,7 @@ input {
 
                 </div>
 
-
             </div>
-
-
-            <!-- PRODUCTS -->
 
             <div class="products-section">
 
@@ -2391,15 +2700,11 @@ input {
                     ITEMS IN THIS ORDER
                 </div>
 
-
                 <div class="product-list">
-
 
                 <?php foreach ($items as $item): ?>
 
-
                     <div class="product-item">
-
 
                         <?php
 
@@ -2408,12 +2713,11 @@ input {
                         if (!empty($item['image'])) {
 
                             $productImage =
-                                'assets/' .
+                                '../ABELLA-APPAREL/assets/' .
                                 basename($item['image']);
                         }
 
                         ?>
-
 
                         <?php if ($productImage !== ''): ?>
 
@@ -2439,7 +2743,6 @@ input {
 
                         <?php endif; ?>
 
-
                         <div class="product-info">
 
                             <div class="product-name">
@@ -2464,7 +2767,6 @@ input {
 
                         </div>
 
-
                         <div class="product-subtotal">
 
                             ₱<?= number_format(
@@ -2474,19 +2776,13 @@ input {
 
                         </div>
 
-
                     </div>
 
-
                 <?php endforeach; ?>
-
 
                 </div>
 
             </div>
-
-
-            <!-- ORDER BOTTOM -->
 
             <div class="order-bottom">
 
@@ -2499,7 +2795,6 @@ input {
                     </strong>
 
                 </div>
-
 
                 <div class="order-total">
 
@@ -2518,24 +2813,84 @@ input {
 
             </div>
 
+            <?php
+                $orderReviews = getUserOrderReviews(
+                    $conn,
+                    (int) $order['id']
+                );
+                $orderReviewProducts = $reviewProducts[(int)$order['id']] ?? [];
+                $unreviewedProductCount = 0;
+
+                foreach ($orderReviewProducts as $reviewProduct) {
+                    if (!isset($orderReviews[(int)$reviewProduct['id']])) {
+                        $unreviewedProductCount++;
+                    }
+                }
+            ?>
+
+            <?php if (strtolower($order['status']) === 'delivered'): ?>
+
+                <div class="order-actions">
+
+                    <?php if (empty($order['received_at'])): ?>
+
+                        <form method="POST">
+                            <input type="hidden" name="order_action" value="received">
+                            <input type="hidden" name="order_id" value="<?= (int) $order['id'] ?>">
+                            <button type="submit" class="order-action-btn">
+                                ORDER RECEIVED
+                            </button>
+                        </form>
+
+                    <?php elseif ($unreviewedProductCount > 0): ?>
+
+                        <span class="order-received-label">
+                            ORDER RECEIVED
+                        </span>
+
+                        <button
+                            type="button"
+                            class="order-action-btn secondary"
+                            onclick="openReviewModal(<?= (int) $order['id'] ?>)"
+                        >
+                            RATE &amp; REVIEW
+                        </button>
+
+                    <?php else: ?>
+
+                        <div>
+                            <?php foreach ($orderReviews as $orderReview): ?>
+                                <div class="review-stars">
+                                    <?= str_repeat('★', (int) $orderReview['rating']) ?><?= str_repeat('☆', 5 - (int) $orderReview['rating']) ?>
+                                </div>
+                                <?php if (trim((string) $orderReview['review']) !== ''): ?>
+                                    <div class="review-text">
+                                        <?= e($orderReview['review']) ?>
+                                    </div>
+                                <?php endif; ?>
+                                <div class="review-date">
+                                    REVIEWED <?= date('M d, Y', strtotime($orderReview['created_at'])) ?>
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
+
+                    <?php endif; ?>
+
+                </div>
+
+            <?php endif; ?>
 
         </article>
 
-
     <?php endforeach; ?>
-
 
     </div>
 
-
 <?php endif; ?>
-
 
 </section>
 
-
 </main>
-
 
 <section class="account-banner">
 
@@ -2563,13 +2918,10 @@ input {
 
     <div class="footer-main">
 
-
-        <!-- BRAND -->
-
         <div class="footer-brand">
 
             <img
-                src="assets/footer.png"
+                src="../ABELLA-APPAREL/assets/footer.png"
                 alt="Abella Apparel"
             >
 
@@ -2578,11 +2930,7 @@ input {
                 passion, designed for the culture.
             </p>
 
-
             <div class="social">
-
-
-                <!-- FACEBOOK -->
 
                 <a
                     class="social-icon"
@@ -2599,9 +2947,6 @@ input {
                     </svg>
 
                 </a>
-
-
-                <!-- INSTAGRAM -->
 
                 <a
                     class="social-icon"
@@ -2642,9 +2987,6 @@ input {
 
                 </a>
 
-
-                <!-- TIKTOK -->
-
                 <a
                     class="social-icon"
                     href="#"
@@ -2661,13 +3003,9 @@ input {
 
                 </a>
 
-
             </div>
 
         </div>
-
-
-        <!-- SHOP -->
 
         <div class="footer-column">
 
@@ -2675,22 +3013,19 @@ input {
                 SHOP
             </h4>
 
-            <a href="shop.php">
+            <a href="../ABELLA-APPAREL/shop.php">
                 ALL PRODUCTS
             </a>
 
-            <a href="hoodies.php">
+            <a href="../ABELLA-APPAREL/hoodies.php">
                 HOODIES
             </a>
 
-            <a href="tshirts.php">
+            <a href="../ABELLA-APPAREL/tshirts.php">
                 T-SHIRTS
             </a>
 
         </div>
-
-
-        <!-- COMPANY -->
 
         <div class="footer-column">
 
@@ -2698,11 +3033,11 @@ input {
                 COMPANY
             </h4>
 
-            <a href="about.php">
+            <a href="../ABELLA-APPAREL/about.php">
                 ABOUT US
             </a>
 
-            <a href="contact.php">
+            <a href="../ABELLA-APPAREL/contact.php">
                 CONTACT
             </a>
 
@@ -2712,31 +3047,25 @@ input {
 
         </div>
 
-
-        <!-- HELP -->
-
         <div class="footer-column">
 
             <h4>
                 HELP
             </h4>
 
-            <a href="contact.php">
+            <a href="../ABELLA-APPAREL/contact.php">
                 CUSTOMER SERVICE
             </a>
 
-            <a href="contact.php">
+            <a href="../ABELLA-APPAREL/contact.php">
                 SHIPPING
             </a>
 
-            <a href="contact.php">
+            <a href="../ABELLA-APPAREL/contact.php">
                 RETURNS
             </a>
 
         </div>
-
-
-        <!-- LEGAL -->
 
         <div class="footer-column">
 
@@ -2754,9 +3083,7 @@ input {
 
         </div>
 
-
     </div>
-
 
     <div class="footer-bottom">
 
@@ -2767,6 +3094,136 @@ input {
 
 </footer>
 
+<div
+    class="modal-overlay"
+    id="reviewModal"
+    onclick="closeReviewModal(event)"
+>
+
+    <div
+        class="account-modal review-modal"
+        onclick="event.stopPropagation()"
+    >
+
+        <div class="modal-header">
+            <h2>
+                Rate &amp; Review
+            </h2>
+
+            <button
+                type="button"
+                class="modal-close"
+                onclick="closeReviewModal()"
+            >
+                ×
+            </button>
+        </div>
+
+        <form method="POST">
+
+            <input
+                type="hidden"
+                name="order_action"
+                value="review"
+            >
+
+            <input
+                type="hidden"
+                name="order_id"
+                id="reviewOrderId"
+                value=""
+            >
+
+            <div class="modal-body">
+
+                <div class="form-group">
+                    <label for="reviewProductId">
+                        PRODUCT TO REVIEW
+                    </label>
+
+                    <select
+                        id="reviewProductId"
+                        name="product_id"
+                        class="review-product-select"
+                        required
+                        onchange="updateReviewProductPreview()"
+                    >
+                        <option value="">SELECT PRODUCT</option>
+                    </select>
+
+                    <div
+                        id="reviewProductPreview"
+                        class="review-product-preview"
+                        style="display:none;"
+                    >
+                        <img id="reviewProductImage" src="" alt="">
+                        <div
+                            id="reviewProductName"
+                            class="review-product-preview-name"
+                        ></div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>
+                        YOUR RATING
+                    </label>
+
+                    <div class="rating-select">
+                        <input type="radio" id="star5" name="rating" value="5" required>
+                        <label for="star5">★</label>
+
+                        <input type="radio" id="star4" name="rating" value="4">
+                        <label for="star4">★</label>
+
+                        <input type="radio" id="star3" name="rating" value="3">
+                        <label for="star3">★</label>
+
+                        <input type="radio" id="star2" name="rating" value="2">
+                        <label for="star2">★</label>
+
+                        <input type="radio" id="star1" name="rating" value="1">
+                        <label for="star1">★</label>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="review">
+                        YOUR REVIEW
+                    </label>
+
+                    <textarea
+                        id="review"
+                        name="review"
+                        maxlength="1000"
+                        placeholder="Tell us about your experience..."
+                    ></textarea>
+                </div>
+
+            </div>
+
+            <div class="modal-footer">
+                <button
+                    type="button"
+                    class="cancel-btn"
+                    onclick="closeReviewModal()"
+                >
+                    CANCEL
+                </button>
+
+                <button
+                    type="submit"
+                    class="save-btn"
+                >
+                    SUBMIT REVIEW
+                </button>
+            </div>
+
+        </form>
+
+    </div>
+
+</div>
 
 <div
     class="modal-overlay"
@@ -2778,7 +3235,6 @@ input {
         class="account-modal"
         onclick="event.stopPropagation()"
     >
-
 
         <div class="modal-header">
 
@@ -2796,15 +3252,12 @@ input {
 
         </div>
 
-
         <form
             method="POST"
             enctype="multipart/form-data"
         >
 
-
             <div class="modal-body">
-
 
                 <div class="form-group">
 
@@ -2822,7 +3275,6 @@ input {
 
                 </div>
 
-
                 <div class="form-group">
 
                     <label for="email">
@@ -2838,7 +3290,6 @@ input {
                     >
 
                 </div>
-
 
                 <div class="form-group">
 
@@ -2859,9 +3310,7 @@ input {
 
                 </div>
 
-
             </div>
-
 
             <div class="modal-footer">
 
@@ -2883,19 +3332,19 @@ input {
 
             </div>
 
-
         </form>
-
 
     </div>
 
 </div>
 
-
 </div>
 
-
 <script>
+
+/* =====================================================
+   ACCOUNT MODAL
+===================================================== */
 
 function openAccountModal() {
 
@@ -2908,7 +3357,6 @@ function openAccountModal() {
 
     document.body.style.overflow = 'hidden';
 }
-
 
 function closeAccountModal(event) {
 
@@ -2929,6 +3377,9 @@ function closeAccountModal(event) {
     document.body.style.overflow = '';
 }
 
+/* =====================================================
+   ESCAPE KEY
+===================================================== */
 
 document.addEventListener(
     'keydown',
@@ -2936,11 +3387,107 @@ document.addEventListener(
 
         if (event.key === 'Escape') {
             closeAccountModal();
+            closeReviewModal();
         }
 
     }
 );
 
+/* =====================================================
+   REVIEW MODAL
+===================================================== */
+
+const reviewProducts = <?= json_encode($reviewProducts, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT) ?>;
+
+function updateReviewProductPreview() {
+    const select = document.getElementById('reviewProductId');
+    const preview = document.getElementById('reviewProductPreview');
+    const image = document.getElementById('reviewProductImage');
+    const name = document.getElementById('reviewProductName');
+
+    if (!select || !preview || !image || !name) return;
+
+    const selected = select.options[select.selectedIndex];
+    const product = selected && selected.dataset.product
+        ? JSON.parse(selected.dataset.product)
+        : null;
+
+    if (!product) {
+        preview.style.display = 'none';
+        return;
+    }
+
+    name.textContent = product.name || '';
+
+    if (product.image) {
+        image.src = '../ABELLA-APPAREL/assets/' + product.image.split('/').pop();
+        image.style.display = 'block';
+    } else {
+        image.style.display = 'none';
+    }
+
+    preview.style.display = 'flex';
+}
+
+function openReviewModal(orderId) {
+    const modal = document.getElementById('reviewModal');
+    const orderInput = document.getElementById('reviewOrderId');
+    const productSelect = document.getElementById('reviewProductId');
+    const reviewText = document.getElementById('review');
+
+    if (!modal || !orderInput || !productSelect) return;
+
+    orderInput.value = orderId;
+    productSelect.innerHTML = '<option value="">SELECT PRODUCT</option>';
+
+    const products = reviewProducts[String(orderId)] || reviewProducts[orderId] || [];
+
+    products.forEach(function(product) {
+        const option = document.createElement('option');
+        option.value = product.id;
+        option.textContent = product.name;
+        option.dataset.product = JSON.stringify(product);
+        productSelect.appendChild(option);
+    });
+
+    const firstUnreviewed = products.find(function(product) {
+        return true;
+    });
+
+    if (firstUnreviewed) {
+        productSelect.value = String(firstUnreviewed.id);
+    }
+
+    document.querySelectorAll('#reviewModal input[name="rating"]').forEach(function(input) {
+        input.checked = false;
+    });
+
+    if (reviewText) reviewText.value = '';
+
+    updateReviewProductPreview();
+    modal.classList.add('show');
+    document.body.style.overflow = 'hidden';
+}
+
+function closeReviewModal(event) {
+    if (
+        event &&
+        event.target !== event.currentTarget
+    ) {
+        return;
+    }
+
+    const modal = document.getElementById('reviewModal');
+
+    if (!modal) return;
+
+    modal.classList.remove('show');
+    document.body.style.overflow = '';
+}
+
+/* =====================================================
+   AUTO HIDE SUCCESS MESSAGE
+===================================================== */
 
 setTimeout(function() {
 
@@ -2964,7 +3511,6 @@ setTimeout(function() {
 }, 3500);
 
 </script>
-
 
 </body>
 </html>

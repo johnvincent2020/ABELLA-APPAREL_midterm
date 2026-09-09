@@ -2,6 +2,8 @@
 
 session_start();
 
+require_once 'config.php';
+
 if (!isset($_SESSION['logged_in']) || $_SESSION['logged_in'] !== true) {
     header("Location: login.php");
     exit();
@@ -18,15 +20,121 @@ $total = 0;
 $totalItems = 0;
 
 foreach ($cart as $item) {
-
     $total += $item['price'] * $item['quantity'];
-
     $totalItems += $item['quantity'];
 }
 
-
 $userName = $_SESSION['user_name'] ?? '';
 $userEmail = $_SESSION['user_email'] ?? '';
+
+$discountPercent = 0;
+$discountAmount = 0;
+$discountCode = '';
+$hasDiscount = false;
+$discountUsesAllowed = 0;
+$discountUsesUsed = 0;
+$discountUsesRemaining = 0;
+
+if ($userEmail !== '') {
+
+    $discountStmt = $conn->prepare("
+        SELECT
+            discount_code,
+            discount_percent,
+            discount_uses_allowed,
+            discount_uses_used
+        FROM subscribers
+        WHERE email = ?
+        LIMIT 1
+    ");
+
+    if ($discountStmt) {
+
+        $discountStmt->bind_param(
+            "s",
+            $userEmail
+        );
+
+        $discountStmt->execute();
+
+        $discountResult =
+            $discountStmt->get_result();
+
+        if (
+            $discountResult &&
+            $discountResult->num_rows > 0
+        ) {
+
+            $subscriber =
+                $discountResult->fetch_assoc();
+
+            $discountUsesAllowed =
+                (int)(
+                    $subscriber[
+                        'discount_uses_allowed'
+                    ] ?? 1
+                );
+
+            $discountUsesUsed =
+                (int)(
+                    $subscriber[
+                        'discount_uses_used'
+                    ] ?? 0
+                );
+
+            if ($discountUsesAllowed < 1) {
+                $discountUsesAllowed = 1;
+            }
+
+            if ($discountUsesUsed < 0) {
+                $discountUsesUsed = 0;
+            }
+
+            $discountUsesRemaining =
+                max(
+                    0,
+                    $discountUsesAllowed -
+                    $discountUsesUsed
+                );
+
+            if (
+                !empty(
+                    $subscriber['discount_code']
+                ) &&
+                $discountUsesRemaining > 0
+            ) {
+
+                $discountCode =
+                    $subscriber['discount_code'];
+
+                $discountPercent =
+                    (float)(
+                        $subscriber[
+                            'discount_percent'
+                        ] ?? 15
+                    );
+
+                if ($discountPercent > 0) {
+
+                    $discountAmount =
+                        $total *
+                        ($discountPercent / 100);
+
+                    $hasDiscount = true;
+                }
+            }
+        }
+
+        $discountStmt->close();
+    }
+}
+
+$finalTotal =
+    $total - $discountAmount;
+
+if ($finalTotal < 0) {
+    $finalTotal = 0;
+}
 
 ?>
 
@@ -86,7 +194,6 @@ $userEmail = $_SESSION['user_email'] ?? '';
 
         .checkout-container {
             max-width: 1180px;
-
             margin: 50px auto;
             padding: 0 25px;
         }
@@ -193,7 +300,6 @@ $userEmail = $_SESSION['user_email'] ?? '';
             font-size: 14px;
         }
 
-
         .order-summary {
             background: #000;
             color: #fff;
@@ -267,7 +373,6 @@ $userEmail = $_SESSION['user_email'] ?? '';
         .summary-row.total span:last-child {
             color: #c49d4c;
         }
-
 
         .place-order-button {
             width: 100%;
@@ -349,7 +454,6 @@ $userEmail = $_SESSION['user_email'] ?? '';
 
     </a>
 
-
     <a
         href="cart.php"
         class="back-link"
@@ -360,7 +464,6 @@ $userEmail = $_SESSION['user_email'] ?? '';
 </header>
 
 <main class="checkout-container">
-
 
     <div class="checkout-title">
 
@@ -374,7 +477,6 @@ $userEmail = $_SESSION['user_email'] ?? '';
 
     </div>
 
-
     <div class="checkout-layout">
 
         <form
@@ -387,9 +489,7 @@ $userEmail = $_SESSION['user_email'] ?? '';
                 CUSTOMER INFORMATION
             </h2>
 
-
             <div class="form-row">
-
 
                 <div class="form-group">
 
@@ -407,7 +507,6 @@ $userEmail = $_SESSION['user_email'] ?? '';
 
                 </div>
 
-
                 <div class="form-group">
 
                     <label for="email">
@@ -424,9 +523,7 @@ $userEmail = $_SESSION['user_email'] ?? '';
 
                 </div>
 
-
             </div>
-
 
             <div class="form-group full">
 
@@ -444,14 +541,12 @@ $userEmail = $_SESSION['user_email'] ?? '';
 
             </div>
 
-
             <h2
                 class="section-title"
                 style="margin-top: 30px;"
             >
                 DELIVERY ADDRESS
             </h2>
-
 
             <div class="form-group">
 
@@ -468,9 +563,7 @@ $userEmail = $_SESSION['user_email'] ?? '';
 
             </div>
 
-
             <div class="form-row">
-
 
                 <div class="form-group">
 
@@ -487,7 +580,6 @@ $userEmail = $_SESSION['user_email'] ?? '';
 
                 </div>
 
-
                 <div class="form-group">
 
                     <label for="postal_code">
@@ -503,9 +595,7 @@ $userEmail = $_SESSION['user_email'] ?? '';
 
                 </div>
 
-
             </div>
-
 
             <h2
                 class="section-title"
@@ -513,7 +603,6 @@ $userEmail = $_SESSION['user_email'] ?? '';
             >
                 PAYMENT METHOD
             </h2>
-
 
             <div class="payment-box">
 
@@ -534,13 +623,11 @@ $userEmail = $_SESSION['user_email'] ?? '';
 
             </div>
 
-
             <input
                 type="hidden"
                 name="total_amount"
-                value="<?= $total ?>"
+                value="<?= $finalTotal ?>"
             >
-
 
             <button
                 type="submit"
@@ -551,20 +638,15 @@ $userEmail = $_SESSION['user_email'] ?? '';
 
         </form>
 
-
         <div class="order-summary">
-
 
             <h2>
                 YOUR ORDER
             </h2>
 
-
             <?php foreach ($cart as $item): ?>
 
-
                 <?php
-
 
                 $imagePath = $item['image'];
 
@@ -578,11 +660,7 @@ $userEmail = $_SESSION['user_email'] ?? '';
 
                 ?>
 
-
                 <div class="order-item">
-
-
-                    <!-- PRODUCT PHOTO -->
 
                     <div class="order-item-image">
 
@@ -593,7 +671,6 @@ $userEmail = $_SESSION['user_email'] ?? '';
 
                     </div>
 
-
                     <div>
 
                         <div class="order-item-name">
@@ -601,7 +678,6 @@ $userEmail = $_SESSION['user_email'] ?? '';
                             <?= htmlspecialchars($item['name']) ?>
 
                         </div>
-
 
                         <div class="order-item-quantity">
 
@@ -612,9 +688,6 @@ $userEmail = $_SESSION['user_email'] ?? '';
 
                     </div>
 
-
-                    <!-- PRICE -->
-
                     <div class="order-item-price">
 
                         ₱<?= number_format(
@@ -624,15 +697,11 @@ $userEmail = $_SESSION['user_email'] ?? '';
 
                     </div>
 
-
                 </div>
-
 
             <?php endforeach; ?>
 
-
             <div style="margin-top: 20px;">
-
 
                 <div class="summary-row">
 
@@ -646,7 +715,6 @@ $userEmail = $_SESSION['user_email'] ?? '';
 
                 </div>
 
-
                 <div class="summary-row">
 
                     <span>
@@ -659,6 +727,26 @@ $userEmail = $_SESSION['user_email'] ?? '';
 
                 </div>
 
+                <?php if ($hasDiscount): ?>
+
+                    <div class="summary-row">
+
+                        <span>
+                            Discount (<?= number_format($discountPercent, 0) ?>%)
+                        </span>
+
+                        <span style="color: #7edb8a;">
+
+                            -₱<?= number_format(
+                                $discountAmount,
+                                2
+                            ) ?>
+
+                        </span>
+
+                    </div>
+
+                <?php endif; ?>
 
                 <div class="summary-row shipping">
 
@@ -672,7 +760,6 @@ $userEmail = $_SESSION['user_email'] ?? '';
 
                 </div>
 
-
                 <div class="summary-row total">
 
                     <span>
@@ -680,14 +767,74 @@ $userEmail = $_SESSION['user_email'] ?? '';
                     </span>
 
                     <span>
-                        ₱<?= number_format($total, 2) ?>
+                        ₱<?= number_format(
+                            $finalTotal,
+                            2
+                        ) ?>
                     </span>
 
                 </div>
 
-
             </div>
 
+            <?php if ($hasDiscount): ?>
+
+                <div style="
+                    margin-top: 20px;
+                    padding: 15px;
+                    border: 1px solid #333;
+                ">
+
+                    <div style="
+                        color: #c49d4c;
+                        font-size: 12px;
+                        font-weight: bold;
+                        margin-bottom: 6px;
+                    ">
+                        SUBSCRIBER DISCOUNT
+                    </div>
+
+                    <div style="
+                        color: #aaa;
+                        font-size: 11px;
+                        margin-bottom: 5px;
+                    ">
+
+                        Your
+                        <?= number_format(
+                            $discountPercent,
+                            0
+                        ) ?>%
+                        subscriber discount has been applied.
+
+                    </div>
+
+                    <div style="
+                        color: #aaa;
+                        font-size: 11px;
+                        margin-bottom: 5px;
+                    ">
+
+                        Uses remaining:
+                        <?= $discountUsesRemaining ?>
+
+                    </div>
+
+                    <div style="
+                        color: #fff;
+                        font-size: 12px;
+                        font-weight: bold;
+                    ">
+
+                        <?= htmlspecialchars(
+                            $discountCode
+                        ) ?>
+
+                    </div>
+
+                </div>
+
+            <?php endif; ?>
 
             <div class="secure-note">
 
@@ -695,9 +842,7 @@ $userEmail = $_SESSION['user_email'] ?? '';
 
             </div>
 
-
         </div>
-
 
     </div>
 

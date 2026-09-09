@@ -593,6 +593,9 @@ if ($result) {
                 </span>
             <?php endif; ?>
         </a>
+        <a href="admin_reviews.php">
+    Reviews
+</a>
         <a href="admin_subscribers.php">
             Subscribers
         </a>

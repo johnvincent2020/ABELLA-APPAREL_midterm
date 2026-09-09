@@ -11,22 +11,17 @@ $isUser = $isLoggedIn
     && isset($_SESSION['user_role'])
     && $_SESSION['user_role'] === 'user';
 
-
 $cartCount = 0;
 
 if (isset($_SESSION['cart']) && is_array($_SESSION['cart'])) {
-
     foreach ($_SESSION['cart'] as $item) {
-
         $cartCount += (int)($item['quantity'] ?? 0);
     }
 }
 
-
 $formMessage = '';
 $postMessage = '';
 $messages = [];
-
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
@@ -34,11 +29,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         isset($_SERVER['HTTP_X_REQUESTED_WITH']) &&
         strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest';
 
-
     if (!$isUser || !isset($_SESSION['user_id'])) {
 
         if ($isAjax) {
-
             header('Content-Type: application/json; charset=utf-8');
 
             echo json_encode([
@@ -54,16 +47,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } else {
 
         $userId = (int)$_SESSION['user_id'];
-
         $message = trim($_POST['message'] ?? '');
-
         $postMessage = $message;
-
 
         if ($message === '') {
 
             if ($isAjax) {
                 header('Content-Type: application/json; charset=utf-8');
+
                 echo json_encode([
                     'success' => false,
                     'message' => 'Please enter a message.'
@@ -74,17 +65,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             $formMessage = 'Please enter a message.';
 
-
-
         } elseif (strlen($message) > 2000) {
 
             if ($isAjax) {
-
                 header('Content-Type: application/json; charset=utf-8');
+
                 echo json_encode([
                     'success' => false,
-                    'message' =>
-                        'Your message is too long. Please keep it under 2000 characters.'
+                    'message' => 'Your message is too long. Please keep it under 2000 characters.'
                 ]);
 
                 exit;
@@ -101,8 +89,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 VALUES (?, 'customer', ?, 0)
             ");
 
-
             if ($stmt) {
+
                 $stmt->bind_param(
                     "is",
                     $userId,
@@ -112,6 +100,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if ($stmt->execute()) {
 
                     $newMessageId = $stmt->insert_id;
+
+                    $createdAt = date('Y-m-d H:i:s');
 
                     $stmt->close();
 
@@ -124,7 +114,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         echo json_encode([
                             'success' => true,
                             'id' => $newMessageId,
+                            'sender' => 'customer',
                             'message' => $message,
+                            'created_at' => $createdAt,
                             'time' => date('M d • h:i A')
                         ]);
 
@@ -132,14 +124,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     }
 
                     header("Location: contact.php");
-
                     exit;
-
 
                 } else {
 
                     $stmt->close();
-
 
                     if ($isAjax) {
 
@@ -159,7 +148,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $formMessage =
                         'Sorry, your message could not be sent. Please try again.';
                 }
-
 
             } else {
 
@@ -201,7 +189,6 @@ if ($isUser && isset($_SESSION['user_id'])) {
         ORDER BY created_at ASC, id ASC
     ");
 
-
     if ($stmt) {
 
         $stmt->bind_param(
@@ -213,12 +200,9 @@ if ($isUser && isset($_SESSION['user_id'])) {
 
         $result = $stmt->get_result();
 
-
         while ($row = $result->fetch_assoc()) {
-
             $messages[] = $row;
         }
-
 
         $stmt->close();
     }
@@ -236,7 +220,6 @@ if ($isUser && isset($_SESSION['user_id'])) {
         AND is_read = 0
     ");
 
-
     if ($readStmt) {
 
         $readStmt->bind_param(
@@ -253,7 +236,6 @@ if ($isUser && isset($_SESSION['user_id'])) {
 ?>
 
 <!DOCTYPE html>
-
 <html lang="en">
 
 <head>
@@ -264,11 +246,14 @@ if ($isUser && isset($_SESSION['user_id'])) {
         name="viewport"
         content="width=device-width, initial-scale=1.0"
     >
+
     <title>Contact Us | ABELLA APPAREL</title>
+
     <link
         rel="stylesheet"
         href="style.css?v=<?php echo time(); ?>"
     >
+
     <style>
 
         .contact-page {
@@ -651,7 +636,6 @@ if ($isUser && isset($_SESSION['user_id'])) {
             border: 1px solid #333;
         }
 
-
         .message-content {
             max-width: 72%;
             display: flex;
@@ -721,7 +705,6 @@ if ($isUser && isset($_SESSION['user_id'])) {
         .customer-message-status.read {
             color: #c49d4c;
         }
-
 
         .chat-composer {
             padding: 15px 22px 20px;
@@ -882,7 +865,6 @@ if ($isUser && isset($_SESSION['user_id'])) {
             }
         }
 
-
         @media (max-width: 600px) {
 
             .contact-hero {
@@ -941,7 +923,6 @@ if ($isUser && isset($_SESSION['user_id'])) {
             }
         }
 
-
         @media (max-width: 400px) {
 
             .chat-box {
@@ -970,35 +951,46 @@ if ($isUser && isset($_SESSION['user_id'])) {
 
 </head>
 
-
 <body>
 
 <div class="site contact-page">
+
     <header class="header">
+
         <div class="header-inner">
+
             <a href="index.php">
+
                 <img
                     class="logo"
                     src="assets/header-logo.png"
                     alt="Abella Apparel"
                 >
+
             </a>
+
             <nav class="nav">
+
                 <a href="index.php">
                     HOME
                 </a>
+
                 <a href="shop.php">
                     SHOP
                 </a>
+
                 <a href="hoodies.php">
                     HOODIES
                 </a>
+
                 <a href="tshirts.php">
                     T-SHIRTS
                 </a>
+
                 <a href="about.php">
                     ABOUT
                 </a>
+
                 <a href="contact.php">
                     CONTACT
                 </a>
@@ -1032,8 +1024,11 @@ if ($isUser && isset($_SESSION['user_id'])) {
                             x2="16.65"
                             y2="16.65"
                         ></line>
+
                     </svg>
+
                 </a>
+
                 <a
                     href="<?= $isUser
                         ? 'user_page.php'
@@ -1062,6 +1057,7 @@ if ($isUser && isset($_SESSION['user_id'])) {
                     </svg>
 
                 </a>
+
                 <a
                     href="cart.php"
                     class="icon cart-icon"
@@ -1097,7 +1093,6 @@ if ($isUser && isset($_SESSION['user_id'])) {
 
                     </svg>
 
-
                     <?php if ($cartCount > 0): ?>
 
                         <span class="cart-count">
@@ -1113,6 +1108,7 @@ if ($isUser && isset($_SESSION['user_id'])) {
         </div>
 
     </header>
+
     <section class="contact-hero">
 
         <div class="contact-hero-content">
@@ -1137,31 +1133,42 @@ if ($isUser && isset($_SESSION['user_id'])) {
         </div>
 
     </section>
+
     <section class="contact-main">
+
         <div class="contact-info">
+
             <div class="contact-label">
                 GET IN TOUCH
             </div>
+
             <h2>
                 WE'RE HERE<br>
                 <span>TO HELP.</span>
             </h2>
+
             <div class="contact-gold-line"></div>
+
             <p>
                 Whether you have a question about our
                 collection, your order, sizing, or simply
                 want to connect with us, send us a message.
                 Our team will be happy to assist you.
             </p>
+
             <div class="contact-details">
+
                 <div class="contact-detail">
+
                     <div class="contact-detail-icon">
+
                         <svg
                             viewBox="0 0 24 24"
                             fill="none"
                             stroke="currentColor"
                             stroke-width="1.5"
                         >
+
                             <rect
                                 x="3"
                                 y="5"
@@ -1169,133 +1176,195 @@ if ($isUser && isset($_SESSION['user_id'])) {
                                 height="14"
                                 rx="2"
                             ></rect>
+
                             <path
                                 d="M3 7l9 6 9-6"
                             ></path>
+
                         </svg>
+
                     </div>
+
                     <div class="contact-detail-content">
+
                         <h3>
                             EMAIL
                         </h3>
+
                         <p>
                             abellaapparel@gmail.com
                         </p>
+
                     </div>
+
                 </div>
+
                 <div class="contact-detail">
+
                     <div class="contact-detail-icon">
+
                         <svg
                             viewBox="0 0 24 24"
                             fill="none"
                             stroke="currentColor"
                             stroke-width="1.5"
                         >
+
                             <path
                                 d="M6.5 3.5h3l1.5 5-2 1.5a14 14 0 0 0 5 5l1.5-2 5 1.5v3c0 1.1-.9 2-2 2C10.5 19.5 4.5 13.5 4.5 6.5c0-1.1.9-2 2-2z"
                             ></path>
+
                         </svg>
+
                     </div>
+
                     <div class="contact-detail-content">
+
                         <h3>
                             PHONE
                         </h3>
+
                         <p>
                             +63 9XX XXX XXXX
                         </p>
+
                     </div>
+
                 </div>
+
                 <div class="contact-detail">
+
                     <div class="contact-detail-icon">
+
                         <svg
                             viewBox="0 0 24 24"
                             fill="none"
                             stroke="currentColor"
                             stroke-width="1.5"
                         >
+
                             <path
                                 d="M12 21s7-6.2 7-12a7 7 0 1 0-14 0c0 5.8 7 12 7 12z"
                             ></path>
+
                             <circle
                                 cx="12"
                                 cy="9"
                                 r="2.5"
                             ></circle>
+
                         </svg>
+
                     </div>
+
                     <div class="contact-detail-content">
+
                         <h3>
                             LOCATION
                         </h3>
+
                         <p>
                             Philippines
                         </p>
+
                     </div>
+
                 </div>
+
                 <div class="contact-detail">
+
                     <div class="contact-detail-icon">
+
                         <svg
                             viewBox="0 0 24 24"
                             fill="none"
                             stroke="currentColor"
                             stroke-width="1.5"
                         >
+
                             <circle
                                 cx="12"
                                 cy="12"
                                 r="8.5"
                             ></circle>
+
                             <path
                                 d="M12 7v5l3 2"
                             ></path>
+
                         </svg>
+
                     </div>
+
                     <div class="contact-detail-content">
+
                         <h3>
                             BUSINESS HOURS
                         </h3>
+
                         <p>
                             Monday – Saturday<br>
                             9:00 AM – 6:00 PM
                         </p>
+
                     </div>
+
                 </div>
+
             </div>
+
         </div>
+
         <div
             class="contact-form-wrapper"
             id="contact-form-wrapper"
         >
+
             <div class="chat-header">
+
                 <div class="chat-header-left">
+
                     <div class="chat-avatar">
                         AA
                     </div>
+
                     <div class="chat-header-info">
+
                         <div class="chat-header-name">
                             ABELLA APPAREL
                         </div>
+
                         <div class="chat-header-status">
+
                             <span class="chat-online"></span>
+
                             Customer Support
+
                         </div>
+
                     </div>
+
                 </div>
+
                 <div class="chat-header-icon">
+
                     <svg
                         viewBox="0 0 24 24"
                         fill="none"
                         stroke="currentColor"
                         stroke-width="1.5"
                     >
+
                         <circle
                             cx="12"
                             cy="12"
                             r="9"
                         ></circle>
+
                         <path
                             d="M12 10v6"
                         ></path>
+
                         <circle
                             cx="12"
                             cy="7"
@@ -1303,123 +1372,180 @@ if ($isUser && isset($_SESSION['user_id'])) {
                             fill="currentColor"
                             stroke="none"
                         ></circle>
+
                     </svg>
+
                 </div>
+
             </div>
+
             <div class="contact-form-title">
+
                 <h2>
                     SEND US A <span>MESSAGE.</span>
                 </h2>
+
                 <p>
                     Start a conversation with the Abella Apparel team.
                 </p>
+
             </div>
+
             <?php if (!empty($formMessage)): ?>
+
                 <div
                     id="contact-form-message"
                     class="contact-message error"
                 >
                     <?= htmlspecialchars($formMessage) ?>
                 </div>
+
             <?php endif; ?>
+
             <?php if ($isUser): ?>
 
                 <div
                     class="chat-box"
                     id="chat-box"
                 >
+
                     <?php if (empty($messages)): ?>
+
                         <div class="chat-empty">
+
                             <div class="chat-empty-inner">
+
                                 <div class="chat-empty-avatar">
                                     AA
                                 </div>
+
                                 <h3>
                                     START A CONVERSATION
                                 </h3>
+
                                 <p>
                                     Send us a message about your
                                     order, products, sizing, or
                                     anything else you'd like to ask.
                                 </p>
+
                             </div>
+
                         </div>
 
                     <?php else: ?>
+
                         <?php foreach ($messages as $msg): ?>
+
                             <?php
+
                             $isCustomer =
                                 strtolower($msg['sender']) === 'customer';
+
                             $messageClass =
                                 $isCustomer
                                 ? 'customer'
                                 : 'admin';
+
                             ?>
+
                             <div
                                 class="message-row <?= $messageClass ?>"
+                                data-message-id="<?= (int)$msg['id'] ?>"
                             >
+
                                 <?php if (!$isCustomer): ?>
+
                                     <div class="message-avatar admin-avatar">
                                         AA
                                     </div>
+
                                 <?php endif; ?>
+
                                 <div class="message-content">
+
                                     <div class="message-sender">
 
                                         <?= $isCustomer
                                             ? 'YOU'
                                             : 'ABELLA APPAREL' ?>
+
                                     </div>
+
                                     <div
                                         class="message-bubble <?= $isCustomer
                                             ? 'customer-bubble'
                                             : 'admin-bubble' ?>"
                                     >
+
                                         <?= nl2br(
                                             htmlspecialchars(
                                                 $msg['message']
                                             )
                                         ) ?>
+
                                     </div>
+
                                     <div class="message-meta">
+
                                         <span class="message-time">
+
                                             <?= date(
                                                 'M d • h:i A',
                                                 strtotime(
                                                     $msg['created_at']
                                                 )
                                             ) ?>
+
                                         </span>
+
                                         <?php if ($isCustomer): ?>
+
                                             <span
                                                 class="customer-message-status <?= (int)$msg['is_read'] === 1
                                                     ? 'read'
                                                     : '' ?>"
                                             >
+
                                                 <?= (int)$msg['is_read'] === 1
                                                     ? '✓✓'
                                                     : '✓' ?>
+
                                             </span>
+
                                         <?php endif; ?>
+
                                     </div>
+
                                 </div>
+
                                 <?php if ($isCustomer): ?>
+
                                     <div class="message-avatar customer-avatar">
                                         YOU
                                     </div>
+
                                 <?php endif; ?>
+
                             </div>
+
                         <?php endforeach; ?>
+
                     <?php endif; ?>
+
                 </div>
+
                 <div class="chat-composer">
+
                     <form
                         class="contact-form"
                         method="POST"
                         action="contact.php"
                         id="message-form"
                     >
+
                         <div class="contact-field">
+
                             <textarea
                                 id="message"
                                 name="message"
@@ -1427,13 +1553,16 @@ if ($isUser && isset($_SESSION['user_id'])) {
                                 maxlength="2000"
                                 required
                             ><?= htmlspecialchars($postMessage) ?></textarea>
+
                         </div>
+
                         <button
                             type="submit"
                             class="contact-submit"
                             aria-label="Send message"
                             title="Send message"
                         >
+
                             <svg
                                 viewBox="0 0 24 24"
                                 fill="none"
@@ -1442,81 +1571,115 @@ if ($isUser && isset($_SESSION['user_id'])) {
                                 stroke-linecap="round"
                                 stroke-linejoin="round"
                             >
+
                                 <path
                                     d="M22 2L11 13"
                                 ></path>
+
                                 <path
                                     d="M22 2L15 22L11 13L2 9L22 2Z"
                                 ></path>
+
                             </svg>
+
                         </button>
+
                     </form>
+
                 </div>
+
             <?php else: ?>
+
                 <div class="chat-login-message">
+
                     <p>
                         Please log in to your customer account
                         before starting a conversation with us.
                     </p>
+
                     <a
                         href="login.php"
                         class="chat-login-link"
                     >
                         LOGIN TO MESSAGE US
                     </a>
+
                 </div>
+
             <?php endif; ?>
+
         </div>
+
     </section>
+
     <section class="contact-banner">
+
         <div class="contact-banner-inner">
+
             <div class="contact-label">
                 ABELLA APPAREL
             </div>
+
             <h2>
                 WEAR YOUR <span>IDENTITY.</span>
             </h2>
+
             <p>
                 Thank you for being part of the Abella Apparel
                 journey. We create with passion and design
                 for those who are not afraid to stand out.
             </p>
+
         </div>
+
     </section>
+
     <footer class="footer">
+
         <div class="footer-main">
+
             <div class="footer-brand">
+
                 <img
                     src="assets/footer.png"
                     alt="Abella Apparel"
                 >
+
                 <p>
                     Premium streetwear inspired by<br>
                     passion, designed for the culture.
                 </p>
+
                 <div class="social">
+
                     <a
                         class="social-icon"
                         href="#"
                         aria-label="Facebook"
                     >
+
                         <svg viewBox="0 0 24 24">
 
                             <path
                                 d="M15 8.5h2V5.3c-.35-.05-1.5-.15-2.85-.15-2.8 0-4.7 1.7-4.7 4.85v2.5H6.5V16h2.95v8h3.4v-8h2.85l.45-3.5h-3.3V10c0-1 .3-1.5 1.65-1.5z"
                             ></path>
+
                         </svg>
+
                     </a>
+
                     <a
                         class="social-icon ig"
                         href="#"
                         aria-label="Instagram"
                     >
+
                         <svg
                             width="15"
                             height="15"
                             viewBox="0 0 24 24"
                         >
+
                             <rect
                                 x="3"
                                 y="3"
@@ -1524,41 +1687,55 @@ if ($isUser && isset($_SESSION['user_id'])) {
                                 height="18"
                                 rx="5"
                             ></rect>
+
                             <circle
                                 class="dot"
                                 cx="12"
                                 cy="12"
                                 r="4"
                             ></circle>
+
                             <circle
                                 class="dot"
                                 cx="17.3"
                                 cy="6.7"
                                 r="0.6"
                             ></circle>
+
                         </svg>
+
                     </a>
+
                     <a
                         class="social-icon tiktok"
                         href="#"
                         aria-label="TikTok"
                     >
+
                         <svg
                             width="15"
                             height="15"
                             viewBox="0 0 24 24"
                         >
+
                             <path
                                 d="M15.5 3c.4 2.2 1.8 3.6 4 3.9v2.7c-1.4 0-2.8-.4-4-1.2v6.1c0 3.2-2.6 5.5-5.6 5.5S4.3 17.7 4.3 14.5c0-3 2.4-5.4 5.5-5.5v2.8c-1.4.1-2.5 1.2-2.5 2.7 0 1.5 1.2 2.7 2.7 2.7s2.8-1.1 2.8-2.7V3h2.7z"
                             ></path>
+
                         </svg>
+
                     </a>
+
                 </div>
+
             </div>
+
             <div>
+
                 <h4>
                     SHOP
                 </h4>
+
                 <p>
                     All Products<br>
                     New Arrivals<br>
@@ -1567,11 +1744,15 @@ if ($isUser && isset($_SESSION['user_id'])) {
                     Pants<br>
                     Accessories
                 </p>
+
             </div>
+
             <div>
+
                 <h4>
                     COMPANY
                 </h4>
+
                 <p>
                     About Us<br>
                     Our Story<br>
@@ -1579,49 +1760,69 @@ if ($isUser && isset($_SESSION['user_id'])) {
                     Care Guide<br>
                     Contact Us
                 </p>
+
             </div>
+
             <div>
+
                 <h4>
                     HELP
                 </h4>
+
                 <p>
                     FAQ<br>
                     Shipping Info<br>
                     Payment Methods<br>
                     Track Order
                 </p>
+
             </div>
+
             <div>
+
                 <h4>
                     LEGAL
                 </h4>
+
                 <p>
                     Privacy Policy<br>
                     Terms & Conditions
                 </p>
+
             </div>
+
         </div>
+
         <div class="copyright">
+
             <span>
                 © 2026 ABELLA APPAREL.
                 All rights reserved.
             </span>
+
             <span>
                 Designed with passion
             </span>
+
         </div>
+
     </footer>
+
 </div>
+
 <script>
 
 (function () {
 
     function scrollChatToBottom() {
+
         var chatBox =
             document.getElementById('chat-box');
+
         if (!chatBox) {
             return;
         }
+
         chatBox.scrollTop =
             chatBox.scrollHeight;
     }
@@ -1629,34 +1830,51 @@ if ($isUser && isset($_SESSION['user_id'])) {
     window.addEventListener(
         'load',
         function () {
+
             scrollChatToBottom();
+
             requestAnimationFrame(function () {
+
                 scrollChatToBottom();
+
                 requestAnimationFrame(function () {
+
                     scrollChatToBottom();
+
                 });
+
             });
+
             setTimeout(function () {
+
                 scrollChatToBottom();
+
             }, 100);
+
         }
     );
+
 })();
 
 (function () {
+
     var textarea =
         document.getElementById('message');
+
     if (!textarea) {
         return;
     }
 
     function resizeTextarea() {
+
         textarea.style.height = '48px';
+
         var newHeight =
             Math.min(
                 textarea.scrollHeight,
                 120
             );
+
         textarea.style.height =
             newHeight + 'px';
     }
@@ -1671,30 +1889,367 @@ if ($isUser && isset($_SESSION['user_id'])) {
 })();
 
 (function () {
+
     var textarea =
         document.getElementById('message');
+
     var form =
         document.getElementById('message-form');
+
     var chatBox =
         document.getElementById('chat-box');
+
     if (!textarea || !form || !chatBox) {
         return;
     }
+
+    var latestMessageId = 0;
+
+    var existingMessages =
+        chatBox.querySelectorAll(
+            '[data-message-id]'
+        );
+
+    existingMessages.forEach(function (message) {
+
+        var id =
+            parseInt(
+                message.getAttribute('data-message-id') || '0',
+                10
+            );
+
+        if (id > latestMessageId) {
+            latestMessageId = id;
+        }
+
+    });
+
     function escapeHtml(text) {
+
         var div =
             document.createElement('div');
-        div.textContent = text;
+
+        div.textContent =
+            text == null ? '' : String(text);
+
         return div.innerHTML;
     }
 
+    function formatMessageTime(createdAt) {
+
+        if (!createdAt) {
+            return '';
+        }
+
+        var date =
+            new Date(
+                String(createdAt).replace(' ', 'T')
+            );
+
+        if (isNaN(date.getTime())) {
+            return '';
+        }
+
+        var months = [
+            'Jan',
+            'Feb',
+            'Mar',
+            'Apr',
+            'May',
+            'Jun',
+            'Jul',
+            'Aug',
+            'Sep',
+            'Oct',
+            'Nov',
+            'Dec'
+        ];
+
+        var month =
+            months[date.getMonth()];
+
+        var day =
+            String(date.getDate()).padStart(2, '0');
+
+        var hours =
+            date.getHours();
+
+        var minutes =
+            String(date.getMinutes()).padStart(2, '0');
+
+        var ampm =
+            hours >= 12 ? 'PM' : 'AM';
+
+        hours =
+            hours % 12 || 12;
+
+        return (
+            month +
+            ' ' +
+            day +
+            ' • ' +
+            String(hours).padStart(2, '0') +
+            ':' +
+            minutes +
+            ' ' +
+            ampm
+        );
+    }
+
+    function addIncomingMessage(message) {
+
+        if (!message || !message.id) {
+            return;
+        }
+
+        var messageId =
+            parseInt(message.id, 10);
+
+        if (!messageId) {
+            return;
+        }
+
+        if (
+            chatBox.querySelector(
+                '[data-message-id="' +
+                messageId +
+                '"]'
+            )
+        ) {
+            return;
+        }
+
+        var distanceFromBottom =
+            chatBox.scrollHeight -
+            chatBox.scrollTop -
+            chatBox.clientHeight;
+
+        var wasNearBottom =
+            distanceFromBottom < 120;
+
+        var emptyChat =
+            chatBox.querySelector('.chat-empty');
+
+        if (emptyChat) {
+            emptyChat.remove();
+        }
+
+        var sender =
+            String(message.sender || '').toLowerCase();
+
+        var isCustomer =
+            sender === 'customer';
+
+        var row =
+            document.createElement('div');
+
+        row.className =
+            'message-row ' +
+            (isCustomer ? 'customer' : 'admin');
+
+        row.setAttribute(
+            'data-message-id',
+            messageId
+        );
+
+        var content =
+            document.createElement('div');
+
+        content.className =
+            'message-content';
+
+        var senderElement =
+            document.createElement('div');
+
+        senderElement.className =
+            'message-sender';
+
+        senderElement.textContent =
+            isCustomer
+            ? 'YOU'
+            : 'ABELLA APPAREL';
+
+        var bubble =
+            document.createElement('div');
+
+        bubble.className =
+            'message-bubble ' +
+            (
+                isCustomer
+                ? 'customer-bubble'
+                : 'admin-bubble'
+            );
+
+        bubble.innerHTML =
+            escapeHtml(
+                message.message || ''
+            ).replace(
+                /\n/g,
+                '<br>'
+            );
+
+        var meta =
+            document.createElement('div');
+
+        meta.className =
+            'message-meta';
+
+        var time =
+            document.createElement('span');
+
+        time.className =
+            'message-time';
+
+        time.textContent =
+            formatMessageTime(
+                message.created_at
+            ) ||
+            message.time ||
+            '';
+
+        meta.appendChild(time);
+
+        if (isCustomer) {
+
+            var status =
+                document.createElement('span');
+
+            status.className =
+                'customer-message-status';
+
+            status.textContent =
+                '✓';
+
+            meta.appendChild(status);
+        }
+
+        content.appendChild(
+            senderElement
+        );
+
+        content.appendChild(
+            bubble
+        );
+
+        content.appendChild(
+            meta
+        );
+
+        if (!isCustomer) {
+
+            var adminAvatar =
+                document.createElement('div');
+
+            adminAvatar.className =
+                'message-avatar admin-avatar';
+
+            adminAvatar.textContent =
+                'AA';
+
+            row.appendChild(
+                adminAvatar
+            );
+        }
+
+        row.appendChild(
+            content
+        );
+
+        if (isCustomer) {
+
+            var customerAvatar =
+                document.createElement('div');
+
+            customerAvatar.className =
+                'message-avatar customer-avatar';
+
+            customerAvatar.textContent =
+                'YOU';
+
+            row.appendChild(
+                customerAvatar
+            );
+        }
+
+        chatBox.appendChild(row);
+
+        if (messageId > latestMessageId) {
+            latestMessageId = messageId;
+        }
+
+        if (wasNearBottom) {
+            chatBox.scrollTop =
+                chatBox.scrollHeight;
+        }
+    }
+
+    function pollMessages() {
+
+        fetch(
+            'messages_poll.php?after_id=' +
+            encodeURIComponent(
+                latestMessageId
+            ),
+            {
+                method: 'GET',
+                cache: 'no-store',
+                headers: {
+                    'X-Requested-With':
+                        'XMLHttpRequest'
+                }
+            }
+        )
+        .then(function (response) {
+
+            if (!response.ok) {
+                throw new Error(
+                    'Polling failed'
+                );
+            }
+
+            return response.json();
+
+        })
+        .then(function (data) {
+
+            if (!data || data.success !== true) {
+                return;
+            }
+
+            if (
+                Array.isArray(
+                    data.messages
+                )
+            ) {
+
+                data.messages.forEach(
+                    function (message) {
+
+                        addIncomingMessage(
+                            message
+                        );
+
+                    }
+                );
+            }
+
+        })
+        .catch(function () {});
+
+    }
+
     function sendMessage() {
+
         var message =
             textarea.value.trim();
+
         if (message === '') {
             return;
         }
+
         var pageScroll =
             window.scrollY;
+
         var submitButton =
             form.querySelector(
                 '.contact-submit'
@@ -1719,27 +2274,37 @@ if ($isUser && isset($_SESSION['user_id'])) {
             }
         )
         .then(function (response) {
+
             return response.json();
+
         })
         .then(function (data) {
+
             if (!data.success) {
+
                 var errorBox =
                     document.getElementById(
                         'contact-form-message'
                     );
+
                 if (!errorBox) {
+
                     errorBox =
                         document.createElement(
                             'div'
                         );
+
                     errorBox.id =
                         'contact-form-message';
+
                     errorBox.className =
                         'contact-message error';
+
                     var title =
                         document.querySelector(
                             '.contact-form-title'
                         );
+
                     if (title) {
 
                         title.parentNode.insertBefore(
@@ -1748,130 +2313,155 @@ if ($isUser && isset($_SESSION['user_id'])) {
                         );
                     }
                 }
+
                 errorBox.textContent =
                     data.message ||
                     'Unable to send message.';
+
                 window.scrollTo(
                     0,
                     pageScroll
                 );
+
                 return;
             }
-            var emptyChat =
-                chatBox.querySelector(
-                    '.chat-empty'
-                );
-            if (emptyChat) {
-                emptyChat.remove();
-            }
-            var row =
-                document.createElement('div');
-            row.className =
-                'message-row customer';
-            row.innerHTML =
-                '<div class="message-content">' +
-                    '<div class="message-sender">' +
-                        'YOU' +
-                    '</div>' +
-                    '<div class="message-bubble customer-bubble">' +
-                        escapeHtml(
-                            data.message
-                        ).replace(
-                            /\n/g,
-                            '<br>'
-                        ) +
-                    '</div>' +
-                    '<div class="message-meta">' +
-                        '<span class="message-time">' +
-                            escapeHtml(
-                                data.time
-                            ) +
-                        '</span>' +
-                        '<span class="customer-message-status">' +
-                            '✓' +
-                        '</span>' +
-                    '</div>' +
-                '</div>' +
-                '<div class="message-avatar customer-avatar">' +
-                    'YOU' +
-                '</div>';
-            chatBox.appendChild(row);
+
+            addIncomingMessage({
+
+                id: data.id,
+
+                sender:
+                    data.sender || 'customer',
+
+                message:
+                    data.message || message,
+
+                created_at:
+                    data.created_at || null,
+
+                time:
+                    data.time || ''
+
+            });
+
             textarea.value = '';
+
             textarea.style.height =
                 '48px';
+
             chatBox.scrollTop =
                 chatBox.scrollHeight;
+
             window.scrollTo(
                 0,
                 pageScroll
             );
+
         })
         .catch(function (error) {
+
             console.error(
                 'Message sending error:',
                 error
             );
+
             window.scrollTo(
                 0,
                 pageScroll
             );
+
         })
         .finally(function () {
+
             if (submitButton) {
+
                 submitButton.disabled =
                     false;
             }
+
         });
     }
+
     form.addEventListener(
         'submit',
         function (event) {
+
             event.preventDefault();
+
             sendMessage();
+
         }
     );
+
     textarea.addEventListener(
         'keydown',
         function (event) {
+
             if (
                 event.key === 'Enter' &&
                 !event.shiftKey
             ) {
+
                 event.preventDefault();
+
                 if (
                     textarea.value.trim() !== ''
                 ) {
+
                     sendMessage();
                 }
             }
+
         }
     );
+
+    pollMessages();
+
+    setInterval(
+        pollMessages,
+        2000
+    );
+
 })();
+
 (function () {
+
     var textarea =
         document.getElementById('message');
+
     if (!textarea) {
         return;
     }
+
     textarea.addEventListener(
         'focus',
         function () {
+
             var chatBox =
                 document.getElementById(
                     'chat-box'
                 );
+
             if (chatBox) {
+
                 setTimeout(
                     function () {
+
                         chatBox.scrollTop =
                             chatBox.scrollHeight;
+
                     },
                     100
                 );
             }
+
         }
     );
+
 })();
+
 </script>
+
 </body>
+
 </html>
