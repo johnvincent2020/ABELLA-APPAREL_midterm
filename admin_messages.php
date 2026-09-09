@@ -3,6 +3,42 @@
 session_start();
 require_once 'config.php';
 
+function abella_initials($name) {
+
+    $name = trim((string)$name);
+
+    if ($name === '') {
+        return '?';
+    }
+
+    $parts = preg_split('/\s+/', $name);
+    $initials = strtoupper(substr($parts[0], 0, 1));
+
+    if (count($parts) > 1) {
+        $initials .= strtoupper(substr($parts[count($parts) - 1], 0, 1));
+    }
+
+    return $initials;
+}
+
+function abella_avatar_color($seed) {
+
+    $palette = [
+        '#c49d4c', '#7a8bd8', '#5cb3a4',
+        '#d17a9a', '#d1975c', '#8a7fd1',
+        '#5ca6d1', '#c46b6b'
+    ];
+
+    $hash = 0;
+
+    foreach (str_split((string)$seed) as $char) {
+        $hash = (($hash << 5) - $hash) + ord($char);
+        $hash &= 0xFFFFFFFF;
+    }
+
+    return $palette[abs($hash) % count($palette)];
+}
+
 if (
     !isset($_SESSION['logged_in']) ||
     $_SESSION['logged_in'] !== true ||
@@ -152,6 +188,7 @@ $result = $conn->query("
         u.id,
         u.name,
         u.email,
+        u.profile_photo,
 
         (
             SELECT message
@@ -227,7 +264,8 @@ if ($selectedUser > 0) {
         SELECT
             id,
             name,
-            email
+            email,
+            profile_photo
         FROM users
         WHERE id = ?
         AND role = 'user'
@@ -468,20 +506,46 @@ a {
 }
 
 .customer-list-header {
-    padding: 20px;
-    border-bottom: 1px solid #292929;
-    color: #c49d4c;
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 1.5px;
+    padding: 20px 20px 14px;
+    color: #fff;
+    font-size: 15px;
+    font-weight: 800;
+}
+
+.customer-search {
+    padding: 0 16px 14px;
+}
+
+.customer-search input {
+    width: 100%;
+    background: #1c1c1c;
+    border: 1px solid #292929;
+    border-radius: 20px;
+    padding: 10px 16px;
+    color: #fff;
+    font-size: 12px;
+    outline: none;
+    transition: 0.2s ease;
+}
+
+.customer-search input::placeholder {
+    color: #777;
+}
+
+.customer-search input:focus {
+    border-color: #c49d4c;
 }
 
 .customer-item {
-    display: block;
-    padding: 18px;
-    border-bottom: 1px solid #292929;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
     color: #fff;
     transition: 0.2s ease;
+    border-radius: 12px;
+    margin: 2px 8px;
+    width: calc(100% - 16px);
 }
 
 .customer-item:hover {
@@ -490,19 +554,75 @@ a {
 
 .customer-item.active {
     background: #1c1c1c;
-    border-left: 3px solid #c49d4c;
+}
+
+.avatar {
+    flex-shrink: 0;
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #111;
+    font-size: 15px;
+    font-weight: 800;
+    overflow: hidden;
+}
+
+.avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.avatar .avatar-fallback {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+}
+
+.avatar.avatar-sm {
+    width: 34px;
+    height: 34px;
+    font-size: 12px;
+}
+
+.customer-item-body {
+    flex: 1;
+    min-width: 0;
+}
+
+.customer-item-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 3px;
 }
 
 .customer-name {
     font-size: 13px;
     font-weight: 700;
-    margin-bottom: 5px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
-.customer-email {
-    font-size: 10px;
+.customer-time {
     color: #777;
-    margin-bottom: 10px;
+    font-size: 9px;
+    flex-shrink: 0;
+}
+
+.customer-item-bottom {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
 }
 
 .last-message {
@@ -513,11 +633,16 @@ a {
     text-overflow: ellipsis;
 }
 
+.customer-item.has-unread .last-message {
+    color: #fff;
+    font-weight: 600;
+}
+
 .unread-badge {
-    float: right;
-    min-width: 20px;
-    height: 20px;
-    padding: 0 6px;
+    flex-shrink: 0;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -535,14 +660,17 @@ a {
 }
 
 .conversation-header {
-    padding: 20px;
+    padding: 16px 20px;
     border-bottom: 1px solid #292929;
     background: #111;
+    display: flex;
+    align-items: center;
+    gap: 12px;
 }
 
 .conversation-header h2 {
-    font-size: 17px;
-    margin-bottom: 5px;
+    font-size: 15px;
+    margin-bottom: 3px;
 }
 
 .conversation-header p {
@@ -552,95 +680,173 @@ a {
 
 .conversation-body {
     flex: 1;
-    padding: 25px;
+    padding: 20px 25px;
     overflow-y: auto;
     display: flex;
     flex-direction: column;
-    gap: 15px;
+    scroll-behavior: smooth;
 }
 
 .message-bubble {
-    max-width: 75%;
-    padding: 14px 16px;
-    border: 1px solid #292929;
+    max-width: 65%;
+    padding: 10px 16px;
+    border-radius: 20px;
+    margin-top: 8px;
+    animation: bubble-in 0.15s ease-out;
+}
+
+.message-bubble.grouped {
+    margin-top: 2px;
 }
 
 .customer-message {
     align-self: flex-start;
-    background: #181818;
+    background: #262626;
+    border-bottom-left-radius: 4px;
+}
+
+.customer-message.grouped {
+    border-top-left-radius: 20px;
 }
 
 .admin-message {
     align-self: flex-end;
-    background: #000;
-    border-color: #c49d4c;
+    background: linear-gradient(135deg, #c49d4c, #a67e34);
+    border-bottom-right-radius: 4px;
+}
+
+.admin-message.grouped {
+    border-top-right-radius: 20px;
 }
 
 .message-sender {
-    color: #c49d4c;
-    font-size: 9px;
-    font-weight: 700;
-    letter-spacing: 1.5px;
-    margin-bottom: 7px;
+    display: none;
 }
 
 .message-text {
-    color: #ddd;
-    font-size: 12px;
-    line-height: 1.7;
+    color: #fff;
+    font-size: 13px;
+    line-height: 1.5;
     word-break: break-word;
 }
 
+.customer-message .message-text {
+    color: #eee;
+}
+
+.admin-message .message-text {
+    color: #111;
+    font-weight: 500;
+}
+
 .message-time {
-    color: #555;
+    color: #666;
     font-size: 9px;
-    margin-top: 8px;
+    margin-top: 4px;
+    text-align: right;
+}
+
+.customer-message + .message-time,
+.customer-message ~ .message-time {
+    text-align: left;
+}
+
+.message-time.admin-time {
+    align-self: flex-end;
+}
+
+.message-time.customer-time-stamp {
+    align-self: flex-start;
+}
+
+.seen-indicator {
+    align-self: flex-end;
+    color: #777;
+    font-size: 9px;
+    margin-top: 3px;
+    margin-bottom: 4px;
+    letter-spacing: 0.5px;
+}
+
+@keyframes bubble-in {
+    from {
+        opacity: 0;
+        transform: translateY(6px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
 .reply-area {
-    padding: 18px;
+    padding: 16px 20px;
     border-top: 1px solid #292929;
     background: #111;
 }
 
 .reply-form {
     display: flex;
+    align-items: flex-end;
     gap: 10px;
+    background: #1c1c1c;
+    border: 1px solid #292929;
+    border-radius: 24px;
+    padding: 6px 6px 6px 18px;
+    transition: 0.2s ease;
+}
+
+.reply-form:focus-within {
+    border-color: #c49d4c;
 }
 
 .reply-form textarea {
     flex: 1;
-    height: 70px;
+    height: 24px;
+    max-height: 90px;
     resize: none;
-    background: #000;
+    background: transparent;
     color: #fff;
-    border: 1px solid #292929;
-    padding: 12px;
+    border: none;
+    padding: 6px 0;
     outline: none;
     font-family:
         Arial,
         Helvetica,
         sans-serif;
-    font-size: 12px;
-}
-
-.reply-form textarea:focus {
-    border-color: #c49d4c;
+    font-size: 13px;
+    line-height: 1.4;
 }
 
 .reply-button {
-    width: 110px;
+    flex-shrink: 0;
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
     border: none;
     background: #c49d4c;
     color: #111;
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 1px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     cursor: pointer;
+    transition: 0.2s ease;
+}
+
+.reply-button svg {
+    width: 16px;
+    height: 16px;
+    fill: #111;
+    margin-left: -1px;
 }
 
 .reply-button:hover {
     background: #fff;
+}
+
+.reply-button:disabled {
+    opacity: 0.5;
+    cursor: default;
 }
 
 .error-message {
@@ -694,17 +900,8 @@ a {
         gap: 15px;
     }
 
-    .reply-form {
-        flex-direction: column;
-    }
-
-    .reply-button {
-        width: 100%;
-        height: 45px;
-    }
-
     .message-bubble {
-        max-width: 90%;
+        max-width: 85%;
     }
 }
 </style>
@@ -806,37 +1003,81 @@ a {
         <div class="panel customer-list">
 
             <div class="customer-list-header">
-                CUSTOMER MESSAGES
+                Messages
+            </div>
+
+            <div class="customer-search">
+                <input
+                    type="text"
+                    id="customerSearch"
+                    placeholder="Search customers..."
+                    autocomplete="off"
+                >
             </div>
 
             <?php if (!empty($customers)): ?>
 
                 <?php foreach ($customers as $customer): ?>
 
+                    <?php
+                        $unread = (int)$customer['unread_count'];
+                        $initials = abella_initials($customer['name']);
+                        $avatarColor = abella_avatar_color($customer['id']);
+                        $lastTime = $customer['last_message_time']
+                            ? date('M d', strtotime($customer['last_message_time']))
+                            : '';
+                    ?>
+
                     <a
                         href="admin_messages.php?user=<?= (int)$customer['id'] ?>"
-                        class="customer-item <?= $selectedUser === (int)$customer['id'] ? 'active' : '' ?>"
+                        class="customer-item <?= $selectedUser === (int)$customer['id'] ? 'active' : '' ?> <?= $unread > 0 ? 'has-unread' : '' ?>"
                         data-customer-id="<?= (int)$customer['id'] ?>"
+                        data-customer-name="<?= htmlspecialchars(strtolower($customer['name'])) ?>"
                     >
 
-                        <?php if ((int)$customer['unread_count'] > 0): ?>
-
-                            <span class="unread-badge">
-                                <?= (int)$customer['unread_count'] ?>
-                            </span>
-
-                        <?php endif; ?>
-
-                        <div class="customer-name">
-                            <?= htmlspecialchars($customer['name']) ?>
+                        <div
+                            class="avatar"
+                            style="background: <?= $avatarColor ?>;"
+                        >
+                            <?php if (!empty($customer['profile_photo'])): ?>
+                                <img
+                                    src="assets/profiles/<?= htmlspecialchars(basename($customer['profile_photo'])) ?>"
+                                    alt="<?= htmlspecialchars($customer['name']) ?>"
+                                    onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';"
+                                >
+                                <span class="avatar-fallback" style="display:none;">
+                                    <?= htmlspecialchars($initials) ?>
+                                </span>
+                            <?php else: ?>
+                                <span class="avatar-fallback">
+                                    <?= htmlspecialchars($initials) ?>
+                                </span>
+                            <?php endif; ?>
                         </div>
 
-                        <div class="customer-email">
-                            <?= htmlspecialchars($customer['email']) ?>
-                        </div>
+                        <div class="customer-item-body">
 
-                        <div class="last-message">
-                            <?= htmlspecialchars($customer['last_message']) ?>
+                            <div class="customer-item-top">
+                                <div class="customer-name">
+                                    <?= htmlspecialchars($customer['name']) ?>
+                                </div>
+                                <div class="customer-time">
+                                    <?= htmlspecialchars($lastTime) ?>
+                                </div>
+                            </div>
+
+                            <div class="customer-item-bottom">
+                                <div class="last-message">
+                                    <?= htmlspecialchars($customer['last_message']) ?>
+                                </div>
+
+                                <?php if ($unread > 0): ?>
+                                    <span class="unread-badge">
+                                        <?= $unread ?>
+                                    </span>
+                                <?php endif; ?>
+                            </div>
+
                         </div>
 
                     </a>
@@ -859,13 +1100,35 @@ a {
 
                 <div class="conversation-header">
 
-                    <h2>
-                        <?= htmlspecialchars($selectedCustomer['name']) ?>
-                    </h2>
+                    <div
+                        class="avatar avatar-sm"
+                        style="background: <?= abella_avatar_color($selectedCustomer['id']) ?>;"
+                    >
+                        <?php if (!empty($selectedCustomer['profile_photo'])): ?>
+                            <img
+                                src="assets/profiles/<?= htmlspecialchars(basename($selectedCustomer['profile_photo'])) ?>"
+                                alt="<?= htmlspecialchars($selectedCustomer['name']) ?>"
+                                onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';"
+                            >
+                            <span class="avatar-fallback" style="display:none;">
+                                <?= htmlspecialchars(abella_initials($selectedCustomer['name'])) ?>
+                            </span>
+                        <?php else: ?>
+                            <span class="avatar-fallback">
+                                <?= htmlspecialchars(abella_initials($selectedCustomer['name'])) ?>
+                            </span>
+                        <?php endif; ?>
+                    </div>
 
-                    <p>
-                        <?= htmlspecialchars($selectedCustomer['email']) ?>
-                    </p>
+                    <div>
+                        <h2>
+                            <?= htmlspecialchars($selectedCustomer['name']) ?>
+                        </h2>
+
+                        <p>
+                            <?= htmlspecialchars($selectedCustomer['email']) ?>
+                        </p>
+                    </div>
 
                 </div>
 
@@ -877,31 +1140,57 @@ a {
 
                     <?php if (!empty($conversation)): ?>
 
-                        <?php foreach ($conversation as $msg): ?>
+                        <?php
+                            $prevSender = null;
+                            $lastAdminIndex = null;
+
+                            foreach ($conversation as $i => $msg) {
+                                if ($msg['sender'] === 'admin') {
+                                    $lastAdminIndex = $i;
+                                }
+                            }
+                        ?>
+
+                        <?php foreach ($conversation as $i => $msg): ?>
+
+                            <?php
+                                $isGrouped = $prevSender === $msg['sender'];
+                                $prevSender = $msg['sender'];
+
+                                $nextSender = isset($conversation[$i + 1])
+                                    ? $conversation[$i + 1]['sender']
+                                    : null;
+
+                                $isLastInGroup = $nextSender !== $msg['sender'];
+                            ?>
 
                             <div
-                                class="message-bubble <?= $msg['sender'] === 'customer' ? 'customer-message' : 'admin-message' ?>"
+                                class="message-bubble <?= $msg['sender'] === 'customer' ? 'customer-message' : 'admin-message' ?> <?= $isGrouped ? 'grouped' : '' ?>"
                                 data-message-id="<?= (int)$msg['id'] ?>"
+                                data-sender="<?= htmlspecialchars($msg['sender']) ?>"
+                                data-read="<?= (int)$msg['is_read'] ?>"
                             >
-
-                                <div class="message-sender">
-                                    <?= $msg['sender'] === 'customer'
-                                        ? 'CUSTOMER'
-                                        : 'ABELLA APPAREL' ?>
-                                </div>
 
                                 <div class="message-text">
                                     <?= nl2br(htmlspecialchars($msg['message'])) ?>
                                 </div>
 
-                                <div class="message-time">
+                            </div>
+
+                            <?php if ($isLastInGroup): ?>
+                                <div class="message-time <?= $msg['sender'] === 'admin' ? 'admin-time' : 'customer-time-stamp' ?>">
                                     <?= date(
-                                        'M d, Y • h:i A',
+                                        'M d, h:i A',
                                         strtotime($msg['created_at'])
                                     ) ?>
                                 </div>
+                            <?php endif; ?>
 
-                            </div>
+                            <?php if ($i === $lastAdminIndex && (int)$msg['is_read'] === 1): ?>
+                                <div class="seen-indicator" id="seenIndicator">
+                                    Seen
+                                </div>
+                            <?php endif; ?>
 
                         <?php endforeach; ?>
 
@@ -951,8 +1240,11 @@ a {
                             type="submit"
                             class="reply-button"
                             id="replyButton"
+                            aria-label="Send reply"
                         >
-                            SEND REPLY
+                            <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M2 21l21-9L2 3v7l15 2-15 2z"></path>
+                            </svg>
                         </button>
 
                     </form>
@@ -975,6 +1267,37 @@ a {
 
 <script>
 document.addEventListener("DOMContentLoaded", function () {
+
+    const customerSearch =
+        document.getElementById("customerSearch");
+
+    if (customerSearch) {
+
+        customerSearch.addEventListener(
+            "input",
+            function () {
+
+                const query =
+                    this.value.trim().toLowerCase();
+
+                document
+                    .querySelectorAll(
+                        ".customer-item[data-customer-name]"
+                    )
+                    .forEach(function (item) {
+
+                        const name =
+                            item.dataset.customerName || "";
+
+                        item.style.display =
+                            name.indexOf(query) !== -1
+                                ? "flex"
+                                : "none";
+                    });
+
+            }
+        );
+    }
 
     const conversationBody =
         document.getElementById("conversationBody");
@@ -999,6 +1322,7 @@ document.addEventListener("DOMContentLoaded", function () {
         );
 
     let latestMessageId = 0;
+    let lastRenderedSender = null;
 
     const existingMessages =
         conversationBody.querySelectorAll(
@@ -1016,6 +1340,9 @@ document.addEventListener("DOMContentLoaded", function () {
         if (id > latestMessageId) {
             latestMessageId = id;
         }
+
+        lastRenderedSender =
+            message.dataset.sender || lastRenderedSender;
 
     });
 
@@ -1093,6 +1420,16 @@ document.addEventListener("DOMContentLoaded", function () {
             emptyConversation.remove();
         }
 
+        const isGrouped =
+            lastRenderedSender === message.sender;
+
+        const oldSeenIndicator =
+            document.getElementById("seenIndicator");
+
+        if (oldSeenIndicator) {
+            oldSeenIndicator.remove();
+        }
+
         const bubble =
             document.createElement("div");
 
@@ -1102,34 +1439,50 @@ document.addEventListener("DOMContentLoaded", function () {
                 message.sender === "customer"
                     ? "customer-message"
                     : "admin-message"
-            );
+            ) +
+            (isGrouped ? " grouped" : "");
 
         bubble.dataset.messageId =
             messageId;
 
-        bubble.innerHTML =
-            '<div class="message-sender">' +
-                (
-                    message.sender === "customer"
-                        ? "CUSTOMER"
-                        : "ABELLA APPAREL"
-                ) +
-            '</div>' +
+        bubble.dataset.sender =
+            message.sender;
 
+        bubble.dataset.read =
+            message.is_read ? "1" : "0";
+
+        bubble.innerHTML =
             '<div class="message-text">' +
                 escapeHtml(message.message)
                     .replace(/\n/g, "<br>") +
-            '</div>' +
-
-            '<div class="message-time">' +
-                formatMessageTime(
-                    message.created_at
-                ) +
             '</div>';
 
         conversationBody.appendChild(
             bubble
         );
+
+        const timeRow =
+            document.createElement("div");
+
+        timeRow.className =
+            "message-time " +
+            (
+                message.sender === "admin"
+                    ? "admin-time"
+                    : "customer-time-stamp"
+            );
+
+        timeRow.textContent =
+            formatMessageTime(
+                message.created_at
+            );
+
+        conversationBody.appendChild(
+            timeRow
+        );
+
+        lastRenderedSender =
+            message.sender;
 
         if (messageId > latestMessageId) {
             latestMessageId = messageId;
@@ -1213,23 +1566,81 @@ document.addEventListener("DOMContentLoaded", function () {
                 )
             ) {
 
+                let highestReadAdminId = 0;
+
                 data.customer_read_ids.forEach(
                     function (id) {
+
+                        const parsedId =
+                            parseInt(id, 10);
 
                         const messageElement =
                             conversationBody.querySelector(
                                 '[data-message-id="' +
-                                parseInt(id, 10) +
+                                parsedId +
                                 '"]'
                             );
 
                         if (messageElement) {
+
                             messageElement.dataset.read =
                                 "1";
+
+                            if (
+                                messageElement.dataset.sender ===
+                                    "admin" &&
+                                parsedId > highestReadAdminId
+                            ) {
+                                highestReadAdminId =
+                                    parsedId;
+                            }
                         }
 
                     }
                 );
+
+                const allAdminBubbles =
+                    conversationBody.querySelectorAll(
+                        '.message-bubble[data-sender="admin"]'
+                    );
+
+                const lastAdminBubble =
+                    allAdminBubbles.length
+                        ? allAdminBubbles[
+                            allAdminBubbles.length - 1
+                        ]
+                        : null;
+
+                const existingSeen =
+                    document.getElementById(
+                        "seenIndicator"
+                    );
+
+                if (
+                    lastAdminBubble &&
+                    lastAdminBubble.dataset.read === "1"
+                ) {
+
+                    if (!existingSeen) {
+
+                        const seenDiv =
+                            document.createElement("div");
+
+                        seenDiv.className =
+                            "seen-indicator";
+
+                        seenDiv.id = "seenIndicator";
+                        seenDiv.textContent = "Seen";
+
+                        conversationBody.appendChild(
+                            seenDiv
+                        );
+                    }
+
+                } else if (existingSeen) {
+
+                    existingSeen.remove();
+                }
             }
 
             if (
@@ -1331,7 +1742,6 @@ document.addEventListener("DOMContentLoaded", function () {
                 }
 
                 replyButton.disabled = true;
-                replyButton.textContent = "SENDING...";
 
                 const formData =
                     new FormData(replyForm);
@@ -1371,7 +1781,7 @@ document.addEventListener("DOMContentLoaded", function () {
                         replyMessage.value = "";
 
                         replyMessage.style.height =
-                            "70px";
+                            "24px";
 
                     } else {
 
@@ -1394,9 +1804,6 @@ document.addEventListener("DOMContentLoaded", function () {
 
                     replyButton.disabled =
                         false;
-
-                    replyButton.textContent =
-                        "SEND REPLY";
                 });
 
             }
@@ -1424,12 +1831,12 @@ document.addEventListener("DOMContentLoaded", function () {
             function () {
 
                 this.style.height =
-                    "70px";
+                    "24px";
 
                 this.style.height =
                     Math.min(
                         this.scrollHeight,
-                        150
+                        90
                     ) + "px";
 
             }

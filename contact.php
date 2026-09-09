@@ -4,6 +4,42 @@ session_start();
 
 require_once 'config.php';
 
+function abella_initials($name) {
+
+    $name = trim((string)$name);
+
+    if ($name === '') {
+        return '?';
+    }
+
+    $parts = preg_split('/\s+/', $name);
+    $initials = strtoupper(substr($parts[0], 0, 1));
+
+    if (count($parts) > 1) {
+        $initials .= strtoupper(substr($parts[count($parts) - 1], 0, 1));
+    }
+
+    return $initials;
+}
+
+function abella_avatar_color($seed) {
+
+    $palette = [
+        '#c49d4c', '#7a8bd8', '#5cb3a4',
+        '#d17a9a', '#d1975c', '#8a7fd1',
+        '#5ca6d1', '#c46b6b'
+    ];
+
+    $hash = 0;
+
+    foreach (str_split((string)$seed) as $char) {
+        $hash = (($hash << 5) - $hash) + ord($char);
+        $hash &= 0xFFFFFFFF;
+    }
+
+    return $palette[abs($hash) % count($palette)];
+}
+
 $isLoggedIn = isset($_SESSION['logged_in'])
     && $_SESSION['logged_in'] === true;
 
@@ -22,6 +58,42 @@ if (isset($_SESSION['cart']) && is_array($_SESSION['cart'])) {
 $formMessage = '';
 $postMessage = '';
 $messages = [];
+$currentUserName = '';
+$currentUserPhoto = '';
+
+if ($isUser && isset($_SESSION['user_id'])) {
+
+    $profileStmt = $conn->prepare("
+        SELECT
+            name,
+            profile_photo
+        FROM users
+        WHERE id = ?
+        LIMIT 1
+    ");
+
+    if ($profileStmt) {
+
+        $profileUserId = (int)$_SESSION['user_id'];
+
+        $profileStmt->bind_param(
+            "i",
+            $profileUserId
+        );
+
+        $profileStmt->execute();
+
+        $profileResult = $profileStmt->get_result();
+        $profileRow = $profileResult->fetch_assoc();
+
+        if ($profileRow) {
+            $currentUserName = $profileRow['name'] ?? '';
+            $currentUserPhoto = $profileRow['profile_photo'] ?? '';
+        }
+
+        $profileStmt->close();
+    }
+}
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
@@ -446,6 +518,7 @@ if ($isUser && isset($_SESSION['user_id'])) {
             font-size: 11px;
             font-weight: 800;
             letter-spacing: 1px;
+            box-shadow: 0 0 0 3px rgba(196, 157, 76, 0.08);
         }
 
         .chat-header-info {
@@ -535,7 +608,6 @@ if ($isUser && isset($_SESSION['user_id'])) {
             padding: 22px 15px;
             display: flex;
             flex-direction: column;
-            gap: 15px;
             scroll-behavior: smooth;
         }
 
@@ -601,6 +673,23 @@ if ($isUser && isset($_SESSION['user_id'])) {
             width: 100%;
             align-items: flex-end;
             gap: 8px;
+            margin-top: 14px;
+            animation: message-in 0.18s ease-out;
+        }
+
+        .message-row.grouped {
+            margin-top: 3px;
+        }
+
+        @keyframes message-in {
+            from {
+                opacity: 0;
+                transform: translateY(6px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
         }
 
         .message-row.customer {
@@ -623,6 +712,19 @@ if ($isUser && isset($_SESSION['user_id'])) {
             font-weight: 800;
             letter-spacing: 0.5px;
             margin-bottom: 2px;
+            overflow: hidden;
+            visibility: visible;
+        }
+
+        .message-row.grouped .message-avatar {
+            visibility: hidden;
+        }
+
+        .message-avatar img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
         }
 
         .admin-avatar {
@@ -658,6 +760,10 @@ if ($isUser && isset($_SESSION['user_id'])) {
             margin: 0 8px 5px;
         }
 
+        .message-row.grouped .message-sender {
+            display: none;
+        }
+
         .message-row.customer .message-sender {
             color: #c49d4c;
         }
@@ -676,11 +782,19 @@ if ($isUser && isset($_SESSION['user_id'])) {
             border-radius: 18px 18px 4px 18px;
         }
 
+        .message-row.customer.grouped .customer-bubble {
+            border-radius: 18px 4px 4px 18px;
+        }
+
         .admin-bubble {
             background: #1c1c1c;
             color: #ddd;
             border: 1px solid #292929;
             border-radius: 18px 18px 18px 4px;
+        }
+
+        .message-row.admin.grouped .admin-bubble {
+            border-radius: 4px 18px 18px 4px;
         }
 
         .message-meta {
@@ -697,9 +811,14 @@ if ($isUser && isset($_SESSION['user_id'])) {
         }
 
         .customer-message-status {
-            color: #c49d4c;
-            font-size: 8px;
-            letter-spacing: -1px;
+            display: flex;
+            align-items: center;
+            color: #666;
+        }
+
+        .customer-message-status svg {
+            width: 12px;
+            height: 12px;
         }
 
         .customer-message-status.read {
@@ -1407,6 +1526,9 @@ if ($isUser && isset($_SESSION['user_id'])) {
                 <div
                     class="chat-box"
                     id="chat-box"
+                    data-user-name="<?= htmlspecialchars($currentUserName) ?>"
+                    data-user-photo="<?= htmlspecialchars($currentUserPhoto) ?>"
+                    data-user-color="<?= htmlspecialchars(abella_avatar_color($_SESSION['user_id'] ?? 0)) ?>"
                 >
 
                     <?php if (empty($messages)): ?>
@@ -1435,6 +1557,12 @@ if ($isUser && isset($_SESSION['user_id'])) {
 
                     <?php else: ?>
 
+                        <?php
+                            $prevSender = null;
+                            $customerInitials = abella_initials($currentUserName);
+                            $customerColor = abella_avatar_color($_SESSION['user_id'] ?? 0);
+                        ?>
+
                         <?php foreach ($messages as $msg): ?>
 
                             <?php
@@ -1447,10 +1575,15 @@ if ($isUser && isset($_SESSION['user_id'])) {
                                 ? 'customer'
                                 : 'admin';
 
+                            $isGrouped =
+                                $prevSender === $msg['sender'];
+
+                            $prevSender = $msg['sender'];
+
                             ?>
 
                             <div
-                                class="message-row <?= $messageClass ?>"
+                                class="message-row <?= $messageClass ?> <?= $isGrouped ? 'grouped' : '' ?>"
                                 data-message-id="<?= (int)$msg['id'] ?>"
                             >
 
@@ -1506,11 +1639,16 @@ if ($isUser && isset($_SESSION['user_id'])) {
                                                     ? 'read'
                                                     : '' ?>"
                                             >
-
-                                                <?= (int)$msg['is_read'] === 1
-                                                    ? '✓✓'
-                                                    : '✓' ?>
-
+                                                <?php if ((int)$msg['is_read'] === 1): ?>
+                                                    <svg viewBox="0 0 24 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                        <path d="M1 8l4 4L13 4"></path>
+                                                        <path d="M9 8l4 4L21 4"></path>
+                                                    </svg>
+                                                <?php else: ?>
+                                                    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                        <path d="M2 8l4 4L14 4"></path>
+                                                    </svg>
+                                                <?php endif; ?>
                                             </span>
 
                                         <?php endif; ?>
@@ -1521,8 +1659,24 @@ if ($isUser && isset($_SESSION['user_id'])) {
 
                                 <?php if ($isCustomer): ?>
 
-                                    <div class="message-avatar customer-avatar">
-                                        YOU
+                                    <div
+                                        class="message-avatar customer-avatar"
+                                        style="background: <?= $customerColor ?>;"
+                                    >
+                                        <?php if (!empty($currentUserPhoto)): ?>
+                                            <img
+                                                src="assets/profiles/<?= htmlspecialchars(basename($currentUserPhoto)) ?>"
+                                                alt="<?= htmlspecialchars($currentUserName) ?>"
+                                                onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';"
+                                            >
+                                            <span style="display:none; align-items:center; justify-content:center; width:100%; height:100%;">
+                                                <?= htmlspecialchars($customerInitials) ?>
+                                            </span>
+                                        <?php else: ?>
+                                            <span style="display:flex; align-items:center; justify-content:center; width:100%; height:100%;">
+                                                <?= htmlspecialchars($customerInitials) ?>
+                                            </span>
+                                        <?php endif; ?>
                                     </div>
 
                                 <?php endif; ?>
@@ -1904,6 +2058,39 @@ if ($isUser && isset($_SESSION['user_id'])) {
     }
 
     var latestMessageId = 0;
+    var lastRenderedSender = null;
+
+    var chatUserName =
+        chatBox.getAttribute('data-user-name') || '';
+
+    var chatUserPhoto =
+        chatBox.getAttribute('data-user-photo') || '';
+
+    var chatUserColor =
+        chatBox.getAttribute('data-user-color') || '#c49d4c';
+
+    function getInitials(name) {
+
+        name = (name || '').trim();
+
+        if (!name) {
+            return '?';
+        }
+
+        var parts = name.split(/\s+/);
+
+        var initials =
+            parts[0].charAt(0).toUpperCase();
+
+        if (parts.length > 1) {
+            initials +=
+                parts[parts.length - 1]
+                    .charAt(0)
+                    .toUpperCase();
+        }
+
+        return initials;
+    }
 
     var existingMessages =
         chatBox.querySelectorAll(
@@ -1923,6 +2110,16 @@ if ($isUser && isset($_SESSION['user_id'])) {
         }
 
     });
+
+    if (existingMessages.length) {
+
+        lastRenderedSender =
+            existingMessages[
+                existingMessages.length - 1
+            ].classList.contains('customer')
+                ? 'customer'
+                : 'admin';
+    }
 
     function escapeHtml(text) {
 
@@ -2040,12 +2237,16 @@ if ($isUser && isset($_SESSION['user_id'])) {
         var isCustomer =
             sender === 'customer';
 
+        var isGrouped =
+            lastRenderedSender === sender;
+
         var row =
             document.createElement('div');
 
         row.className =
             'message-row ' +
-            (isCustomer ? 'customer' : 'admin');
+            (isCustomer ? 'customer' : 'admin') +
+            (isGrouped ? ' grouped' : '');
 
         row.setAttribute(
             'data-message-id',
@@ -2117,8 +2318,11 @@ if ($isUser && isset($_SESSION['user_id'])) {
             status.className =
                 'customer-message-status';
 
-            status.textContent =
-                '✓';
+            status.innerHTML =
+                '<svg viewBox="0 0 16 16" fill="none" ' +
+                'stroke="currentColor" stroke-width="2" ' +
+                'stroke-linecap="round" stroke-linejoin="round">' +
+                '<path d="M2 8l4 4L14 4"></path></svg>';
 
             meta.appendChild(status);
         }
@@ -2163,8 +2367,59 @@ if ($isUser && isset($_SESSION['user_id'])) {
             customerAvatar.className =
                 'message-avatar customer-avatar';
 
-            customerAvatar.textContent =
-                'YOU';
+            customerAvatar.style.background =
+                chatUserColor;
+
+            if (chatUserPhoto) {
+
+                var img =
+                    document.createElement('img');
+
+                img.src =
+                    'assets/profiles/' +
+                    encodeURIComponent(
+                        chatUserPhoto.split('/').pop()
+                    );
+
+                img.alt =
+                    chatUserName;
+
+                var fallback =
+                    document.createElement('span');
+
+                fallback.style.display = 'none';
+                fallback.style.alignItems = 'center';
+                fallback.style.justifyContent = 'center';
+                fallback.style.width = '100%';
+                fallback.style.height = '100%';
+                fallback.textContent =
+                    getInitials(chatUserName);
+
+                img.onerror = function () {
+                    img.style.display = 'none';
+                    fallback.style.display = 'flex';
+                };
+
+                customerAvatar.appendChild(img);
+                customerAvatar.appendChild(fallback);
+
+            } else {
+
+                var initialsSpan =
+                    document.createElement('span');
+
+                initialsSpan.style.display = 'flex';
+                initialsSpan.style.alignItems = 'center';
+                initialsSpan.style.justifyContent = 'center';
+                initialsSpan.style.width = '100%';
+                initialsSpan.style.height = '100%';
+                initialsSpan.textContent =
+                    getInitials(chatUserName);
+
+                customerAvatar.appendChild(
+                    initialsSpan
+                );
+            }
 
             row.appendChild(
                 customerAvatar
@@ -2172,6 +2427,8 @@ if ($isUser && isset($_SESSION['user_id'])) {
         }
 
         chatBox.appendChild(row);
+
+        lastRenderedSender = sender;
 
         if (messageId > latestMessageId) {
             latestMessageId = messageId;
