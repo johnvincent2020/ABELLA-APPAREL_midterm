@@ -25,6 +25,24 @@ if (isset($_SESSION['cart']) && is_array($_SESSION['cart'])) {
     }
 }
 
+$hasUnreadMessages = false;
+
+$unreadStmt = $conn->prepare("
+    SELECT COUNT(*) AS unread_count
+    FROM messages
+    WHERE user_id = ?
+    AND sender = 'admin'
+    AND is_read = 0
+");
+
+if ($unreadStmt) {
+    $unreadStmt->bind_param("i", $userId);
+    $unreadStmt->execute();
+    $unreadRow = $unreadStmt->get_result()->fetch_assoc();
+    $hasUnreadMessages = ((int)($unreadRow['unread_count'] ?? 0)) > 0;
+    $unreadStmt->close();
+}
+
 $user = [
     'name' => '',
     'email' => '',
@@ -2078,8 +2096,21 @@ input {
                 ABOUT
             </a>
 
-            <a href="../ABELLA-APPAREL/contact.php">
+            <a href="../ABELLA-APPAREL/contact.php" style="position: relative;">
                 CONTACT
+                <span
+                    id="contact-badge"
+                    style="
+                        position: absolute;
+                        top: -4px;
+                        right: -10px;
+                        width: 8px;
+                        height: 8px;
+                        background: #e63946;
+                        border-radius: 50%;
+                        display: <?= $hasUnreadMessages ? 'inline-block' : 'none' ?>;
+                    "
+                ></span>
             </a>
 
         </nav>
@@ -3512,5 +3543,27 @@ setTimeout(function() {
 
 </script>
 
+<script>
+(function () {
+    var contactBadge = document.getElementById('contact-badge');
+
+    if (!contactBadge) {
+        return;
+    }
+
+    function checkUnreadMessages() {
+        fetch('../ABELLA-APPAREL/check_messages.php', { credentials: 'same-origin' })
+            .then(function (res) { return res.json(); })
+            .then(function (data) {
+                contactBadge.style.display = data.hasUnreadMessages
+                    ? 'inline-block'
+                    : 'none';
+            })
+            .catch(function () {});
+    }
+
+    setInterval(checkUnreadMessages, 10000);
+})();
+</script>
 </body>
 </html>

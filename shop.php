@@ -12,6 +12,26 @@ if (isset($_SESSION['cart'])) {
         $cartCount += (int)$item['quantity'];
     }
 }
+
+$hasUnreadMessages = false;
+if ($isUser && isset($_SESSION['user_id'])) {
+    $userId = (int)$_SESSION['user_id'];
+    $unreadStmt = $conn->prepare("
+        SELECT COUNT(*) AS unread_count
+        FROM messages
+        WHERE user_id = ?
+        AND sender = 'admin'
+        AND is_read = 0
+    ");
+    if ($unreadStmt) {
+        $unreadStmt->bind_param("i", $userId);
+        $unreadStmt->execute();
+        $unreadRow = $unreadStmt->get_result()->fetch_assoc();
+        $hasUnreadMessages = ((int)($unreadRow['unread_count'] ?? 0)) > 0;
+        $unreadStmt->close();
+    }
+}
+
 $products = [];
 $result = $conn->query("
     SELECT *
@@ -354,8 +374,21 @@ if ($result) {
                 <a href="about.php">
                     ABOUT
                 </a>
-                <a href="contact.php">
+                <a href="contact.php" style="position: relative;">
                     CONTACT
+                    <span
+                        id="contact-badge"
+                        style="
+                            position: absolute;
+                            top: -4px;
+                            right: -10px;
+                            width: 8px;
+                            height: 8px;
+                            background: #e63946;
+                            border-radius: 50%;
+                            display: <?= $hasUnreadMessages ? 'inline-block' : 'none' ?>;
+                        "
+                    ></span>
                 </a>
             </nav>
             <div class="icons">
@@ -778,6 +811,28 @@ function addToCart(productId) {
     document.body.appendChild(form);
     form.submit();
 }
+</script>
+<script>
+(function () {
+    var contactBadge = document.getElementById('contact-badge');
+
+    if (!contactBadge) {
+        return;
+    }
+
+    function checkUnreadMessages() {
+        fetch('check_messages.php', { credentials: 'same-origin' })
+            .then(function (res) { return res.json(); })
+            .then(function (data) {
+                contactBadge.style.display = data.hasUnreadMessages
+                    ? 'inline-block'
+                    : 'none';
+            })
+            .catch(function () {});
+    }
+
+    setInterval(checkUnreadMessages, 10000);
+})();
 </script>
 </body>
 </html>
