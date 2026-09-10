@@ -36,6 +36,230 @@ $allowed_statuses = [
 
 if (
     $_SERVER['REQUEST_METHOD'] === 'POST' &&
+    isset($_POST['cancel_order'])
+) {
+    header('Content-Type: application/json');
+
+    $order_id = (int)($_POST['order_id'] ?? 0);
+
+    if ($order_id <= 0) {
+        echo json_encode(['success' => false]);
+        exit();
+    }
+
+    $conn->begin_transaction();
+
+    try {
+        $check_stmt = $conn->prepare(" 
+            SELECT status, cancelled_from_status
+            FROM orders
+            WHERE id = ?
+            FOR UPDATE
+        ");
+
+        if (!$check_stmt) {
+            throw new Exception('Unable to check the order.');
+        }
+
+        $check_stmt->bind_param('i', $order_id);
+        $check_stmt->execute();
+        $check_result = $check_stmt->get_result();
+        $order_row = $check_result ? $check_result->fetch_assoc() : null;
+        $check_stmt->close();
+
+        if (!$order_row || !in_array($order_row['status'], ['Pending', 'Processing', 'Shipped'], true)) {
+            throw new Exception('This order cannot be cancelled.');
+        }
+
+        $item_stmt = $conn->prepare(" 
+            SELECT product_name, quantity
+            FROM order_items
+            WHERE order_id = ?
+        ");
+
+        if (!$item_stmt) {
+            throw new Exception('Unable to load the order items.');
+        }
+
+        $item_stmt->bind_param('i', $order_id);
+        $item_stmt->execute();
+        $item_result = $item_stmt->get_result();
+        $items = $item_result ? $item_result->fetch_all(MYSQLI_ASSOC) : [];
+        $item_stmt->close();
+
+        $update_stmt = $conn->prepare(" 
+            UPDATE orders
+            SET cancelled_from_status = status,
+                status = 'Cancelled'
+            WHERE id = ?
+              AND status IN ('Pending', 'Processing', 'Shipped')
+        ");
+
+        if (!$update_stmt) {
+            throw new Exception('Unable to cancel the order.');
+        }
+
+        $update_stmt->bind_param('i', $order_id);
+        $update_stmt->execute();
+
+        if ($update_stmt->affected_rows !== 1) {
+            $update_stmt->close();
+            throw new Exception('This order cannot be cancelled.');
+        }
+
+        $update_stmt->close();
+
+        $restore_stmt = $conn->prepare(" 
+            UPDATE products
+            SET stock = stock + ?
+            WHERE name = ?
+        ");
+
+        if (!$restore_stmt) {
+            throw new Exception('Unable to restore product stock.');
+        }
+
+        foreach ($items as $item) {
+            $quantity = (int)$item['quantity'];
+            $product_name = $item['product_name'];
+            $restore_stmt->bind_param('is', $quantity, $product_name);
+            $restore_stmt->execute();
+        }
+
+        $restore_stmt->close();
+        $conn->commit();
+
+        echo json_encode([
+            'success' => true,
+            'status' => 'Cancelled'
+        ]);
+    } catch (Throwable $exception) {
+        $conn->rollback();
+        echo json_encode([
+            'success' => false,
+            'message' => $exception->getMessage()
+        ]);
+    }
+
+    exit();
+}
+
+if (
+    $_SERVER['REQUEST_METHOD'] === 'POST' &&
+    isset($_POST['undo_cancel_order'])
+) {
+    header('Content-Type: application/json');
+
+    $order_id = (int)($_POST['order_id'] ?? 0);
+    $conn->begin_transaction();
+
+    try {
+        $check_stmt = $conn->prepare(" 
+            SELECT status, cancelled_from_status
+            FROM orders
+            WHERE id = ?
+            FOR UPDATE
+        ");
+
+        if (!$check_stmt) {
+            throw new Exception('Unable to check the order.');
+        }
+
+        $check_stmt->bind_param('i', $order_id);
+        $check_stmt->execute();
+        $check_result = $check_stmt->get_result();
+        $order_row = $check_result ? $check_result->fetch_assoc() : null;
+        $check_stmt->close();
+
+        if (!$order_row || $order_row['status'] !== 'Cancelled') {
+            throw new Exception('Only cancelled orders can be restored.');
+        }
+
+        $restore_status = $order_row['cancelled_from_status'] ?? 'Processing';
+        if (!in_array($restore_status, ['Pending', 'Processing', 'Shipped'], true)) {
+            $restore_status = 'Processing';
+        }
+
+        $item_stmt = $conn->prepare(" 
+            SELECT product_name, quantity
+            FROM order_items
+            WHERE order_id = ?
+        ");
+
+        if (!$item_stmt) {
+            throw new Exception('Unable to load the order items.');
+        }
+
+        $item_stmt->bind_param('i', $order_id);
+        $item_stmt->execute();
+        $item_result = $item_stmt->get_result();
+        $items = $item_result ? $item_result->fetch_all(MYSQLI_ASSOC) : [];
+        $item_stmt->close();
+
+        $stock_stmt = $conn->prepare(" 
+            UPDATE products
+            SET stock = stock - ?
+            WHERE name = ?
+              AND stock >= ?
+        ");
+
+        if (!$stock_stmt) {
+            throw new Exception('Unable to reserve product stock.');
+        }
+
+        foreach ($items as $item) {
+            $quantity = (int)$item['quantity'];
+            $product_name = $item['product_name'];
+            $stock_stmt->bind_param('isi', $quantity, $product_name, $quantity);
+            $stock_stmt->execute();
+
+            if ($stock_stmt->affected_rows !== 1) {
+                $stock_stmt->close();
+                throw new Exception('Not enough stock to restore this order.');
+            }
+        }
+
+        $stock_stmt->close();
+
+        $update_stmt = $conn->prepare(" 
+            UPDATE orders
+            SET status = ?, cancelled_from_status = NULL
+            WHERE id = ?
+              AND status = 'Cancelled'
+        ");
+
+        if (!$update_stmt) {
+            throw new Exception('Unable to restore the order.');
+        }
+
+        $update_stmt->bind_param('si', $restore_status, $order_id);
+        $update_stmt->execute();
+
+        if ($update_stmt->affected_rows !== 1) {
+            $update_stmt->close();
+            throw new Exception('Unable to restore the order.');
+        }
+
+        $update_stmt->close();
+        $conn->commit();
+
+        echo json_encode([
+            'success' => true,
+            'status' => $restore_status
+        ]);
+    } catch (Throwable $exception) {
+        $conn->rollback();
+        echo json_encode([
+            'success' => false,
+            'message' => $exception->getMessage()
+        ]);
+    }
+
+    exit();
+}
+
+if (
+    $_SERVER['REQUEST_METHOD'] === 'POST' &&
     isset($_POST['update_status'])
 ) {
     header('Content-Type: application/json');
@@ -119,11 +343,7 @@ if (
     }
 $stmt = $conn->prepare("
     UPDATE orders
-    SET status = ?,
-        received_at = CASE
-            WHEN ? = 'Delivered' THEN NOW()
-            ELSE received_at
-        END
+    SET status = ?
     WHERE id = ?
 ");
 
@@ -133,12 +353,7 @@ $stmt = $conn->prepare("
         ]);
         exit();
     }
-$stmt->bind_param(
-    "ssi",
-    $new_status,
-    $new_status,
-    $order_id
-);
+$stmt->bind_param("si", $new_status, $order_id);
     $success = $stmt->execute();
 
     $stmt->close();
@@ -229,6 +444,7 @@ $pending = 0;
 $processing = 0;
 $shipped = 0;
 $delivered = 0;
+$cancelled = 0;
 
 foreach ($orders as $order) {
     switch ($order['status']) {
@@ -246,6 +462,10 @@ foreach ($orders as $order) {
 
         case 'Delivered':
             $delivered++;
+            break;
+
+        case 'Cancelled':
+            $cancelled++;
             break;
     }
 }
@@ -504,6 +724,45 @@ a {
     margin-top: 5px;
 }
 
+.order-status-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 8px 11px;
+    border: 1px solid #333;
+    color: #aaa;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .8px;
+    text-transform: uppercase;
+}
+
+.order-status-badge.cancelled {
+    color: #e27d7d;
+    border-color: #6b3d3d;
+    background: #241313;
+}
+
+.cancelled-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.undo-order-btn {
+    padding: 9px 14px;
+    border: 1px solid #315f3b;
+    background: transparent;
+    color: #7edb8a;
+    font-weight: 700;
+    font-size: 12px;
+    cursor: pointer;
+}
+
+.undo-order-btn:hover {
+    background: #315f3b;
+    color: #fff;
+}
+
 .status-form {
     display: flex;
     align-items: center;
@@ -548,6 +807,21 @@ a {
 
 .status-form button:disabled:hover {
     background: #c49d4c;
+}
+
+.cancel-order-btn {
+    padding: 9px 14px;
+    border: 1px solid #6b3d3d;
+    background: transparent;
+    color: #e27d7d;
+    font-weight: 700;
+    font-size: 12px;
+    cursor: pointer;
+}
+
+.cancel-order-btn:hover {
+    background: #b85c5c;
+    color: #fff;
 }
 
 .customer-section {
@@ -930,6 +1204,18 @@ a {
         <div class="stat-card">
 
             <div class="stat-title">
+                Cancelled
+            </div>
+
+            <div class="stat-number">
+                <?= number_format($cancelled) ?>
+            </div>
+
+        </div>
+
+        <div class="stat-card">
+
+            <div class="stat-title">
                 Pending
             </div>
 
@@ -1050,6 +1336,22 @@ a {
 
                         </div>
 
+                        <?php if ($order['status'] === 'Cancelled'): ?>
+
+                            <div class="cancelled-actions">
+                                <span class="order-status-badge cancelled">
+                                    Cancelled
+                                </span>
+                                <form method="POST" class="admin-undo-form">
+                                    <input type="hidden" name="order_id" value="<?= (int)$order['id'] ?>">
+                                    <button type="submit" class="undo-order-btn">
+                                        UNDO CANCEL
+                                    </button>
+                                </form>
+                            </div>
+
+                        <?php else: ?>
+
                         <form
                             method="POST"
                             class="status-form"
@@ -1129,6 +1431,17 @@ a {
                             <?php endif; ?>
 
                         </form>
+
+                        <?php if (in_array($order['status'], ['Pending', 'Processing', 'Shipped'], true)): ?>
+                            <form method="POST" class="admin-cancel-form">
+                                <input type="hidden" name="order_id" value="<?= (int)$order['id'] ?>">
+                                <button type="submit" class="cancel-order-btn">
+                                    CANCEL ORDER
+                                </button>
+                            </form>
+                        <?php endif; ?>
+
+                        <?php endif; ?>
 
                     </div>
 
@@ -1446,6 +1759,72 @@ document.querySelectorAll('.status-form').forEach(function (form) {
             }
         } catch (error) {
             button.disabled = false;
+        }
+    });
+});
+
+document.querySelectorAll('.admin-cancel-form').forEach(function (form) {
+    form.addEventListener('submit', async function (event) {
+        event.preventDefault();
+
+        const button = form.querySelector('button');
+        const orderId = form.querySelector('input[name="order_id"]').value;
+        const formData = new FormData();
+
+        button.disabled = true;
+        formData.append('cancel_order', '1');
+        formData.append('order_id', orderId);
+
+        try {
+            const response = await fetch(window.location.href, {
+                method: 'POST',
+                body: formData,
+                credentials: 'same-origin'
+            });
+            const data = await response.json();
+
+            if (data.success) {
+                window.location.reload();
+            } else {
+                button.disabled = false;
+                alert(data.message || 'Unable to cancel this order.');
+            }
+        } catch (error) {
+            button.disabled = false;
+            alert('Unable to cancel this order.');
+        }
+    });
+});
+
+document.querySelectorAll('.admin-undo-form').forEach(function (form) {
+    form.addEventListener('submit', async function (event) {
+        event.preventDefault();
+
+        const button = form.querySelector('button');
+        const orderId = form.querySelector('input[name="order_id"]').value;
+        const formData = new FormData();
+
+        button.disabled = true;
+        formData.append('undo_cancel_order', '1');
+        formData.append('order_id', orderId);
+
+        try {
+            const response = await fetch(window.location.href, {
+                method: 'POST',
+                body: formData,
+                credentials: 'same-origin'
+            });
+            const data = await response.json();
+
+            if (data.success) {
+                window.location.reload();
+            } else {
+                button.disabled = false;
+                alert(data.message || 'Unable to restore this order.');
+            }
+        } catch (error) {
+            button.disabled = false;
+            alert('Unable to restore this order.');
         }
     });
 });

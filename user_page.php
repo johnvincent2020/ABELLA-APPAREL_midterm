@@ -235,6 +235,75 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['order_action'])) {
 
     if ($orderId <= 0) {
         $flashError = 'Invalid order.';
+    } elseif ($orderAction === 'cancel') {
+
+        $conn->begin_transaction();
+
+        try {
+            $itemStmt = $conn->prepare("
+                SELECT product_name, quantity
+                FROM order_items
+                WHERE order_id = ?
+            ");
+
+            if (!$itemStmt) {
+                throw new Exception('Unable to load the order items.');
+            }
+
+            $itemStmt->bind_param("i", $orderId);
+            $itemStmt->execute();
+            $itemResult = $itemStmt->get_result();
+            $itemsToRestore = $itemResult ? $itemResult->fetch_all(MYSQLI_ASSOC) : [];
+            $itemStmt->close();
+
+            $cancelStmt = $conn->prepare("
+                UPDATE orders
+                SET cancelled_from_status = status,
+                    status = 'Cancelled'
+                WHERE id = ?
+                  AND user_id = ?
+                  AND status = 'Processing'
+            ");
+
+            if (!$cancelStmt) {
+                throw new Exception('Unable to cancel the order.');
+            }
+
+            $cancelStmt->bind_param("ii", $orderId, $userId);
+            $cancelStmt->execute();
+
+            if ($cancelStmt->affected_rows !== 1) {
+                $cancelStmt->close();
+                throw new Exception('Only processing orders can be cancelled.');
+            }
+
+            $cancelStmt->close();
+
+            $restoreStmt = $conn->prepare("
+                UPDATE products
+                SET stock = stock + ?
+                WHERE name = ?
+            ");
+
+            if (!$restoreStmt) {
+                throw new Exception('Unable to restore the product stock.');
+            }
+
+            foreach ($itemsToRestore as $item) {
+                $quantity = (int)$item['quantity'];
+                $productName = $item['product_name'];
+                $restoreStmt->bind_param("is", $quantity, $productName);
+                $restoreStmt->execute();
+            }
+
+            $restoreStmt->close();
+            $conn->commit();
+            $flashSuccess = 'Order cancelled successfully.';
+        } catch (Throwable $exception) {
+            $conn->rollback();
+            $flashError = $exception->getMessage();
+        }
+
     } elseif ($orderAction === 'received') {
 
         $stmt = $conn->prepare("
@@ -546,6 +615,9 @@ function statusClass($status)
 {
     switch (strtolower($status)) {
 
+        case 'cancelled':
+            return 'status-cancelled';
+
         case 'delivered':
             return 'status-delivered';
 
@@ -564,6 +636,9 @@ function statusNumber($status)
 {
     switch (strtolower($status)) {
 
+        case 'cancelled':
+            return 0;
+
         case 'pending':
             return 1;
 
@@ -579,6 +654,36 @@ function statusNumber($status)
         default:
             return 1;
     }
+}
+
+function estimatedDelivery($status, $createdAt)
+{
+    $normalizedStatus = strtolower($status);
+
+    if ($normalizedStatus === 'cancelled') {
+        return 'Delivery unavailable for cancelled order';
+    }
+
+    if ($normalizedStatus === 'delivered') {
+        return 'Order delivered';
+    }
+
+    $deliveryWindow = [
+        'pending' => [5, 7],
+        'processing' => [3, 5],
+        'shipped' => [1, 3]
+    ];
+
+    $days = $deliveryWindow[$normalizedStatus] ?? [5, 7];
+    $startDate = new DateTime($createdAt);
+    $endDate = new DateTime($createdAt);
+    $startDate->modify('+' . $days[0] . ' days');
+    $endDate->modify('+' . $days[1] . ' days');
+
+    return 'Estimated delivery: ' .
+        $startDate->format('M d') .
+        ' - ' .
+        $endDate->format('M d, Y');
 }
 
 
@@ -1102,6 +1207,13 @@ input {
     font-size: 10px;
 }
 
+.estimated-delivery {
+    margin-top: 8px;
+    color: #c49d4c;
+    font-size: 10px;
+    letter-spacing: .5px;
+}
+
 /* =====================================================
    STATUS
 ===================================================== */
@@ -1142,6 +1254,12 @@ input {
     color: #7edb8a;
     border-color: #315f3b;
     background: #102718;
+}
+
+.status-cancelled {
+    color: #e27d7d;
+    border-color: #6b3d3d;
+    background: #241313;
 }
 
 /* =====================================================
@@ -1798,6 +1916,17 @@ input {
 .order-action-btn.secondary:hover {
     background: #c49d4c;
     color: #000;
+}
+
+.order-action-btn.danger {
+    border-color: #b85c5c;
+    background: transparent;
+    color: #e27d7d;
+}
+
+.order-action-btn.danger:hover {
+    background: #b85c5c;
+    color: #fff;
 }
 
 .order-received-label {
@@ -2561,6 +2690,10 @@ input {
 
                     </div>
 
+                    <div class="estimated-delivery">
+                        <?= e(estimatedDelivery($order['status'], $order['created_at'])) ?>
+                    </div>
+
                 </div>
 
                 <div
@@ -2907,6 +3040,18 @@ input {
 
                     <?php endif; ?>
 
+                </div>
+
+            <?php elseif (strtolower($order['status']) === 'processing'): ?>
+
+                <div class="order-actions">
+                    <form method="POST" onsubmit="return confirm('Cancel this processing order?');">
+                        <input type="hidden" name="order_action" value="cancel">
+                        <input type="hidden" name="order_id" value="<?= (int) $order['id'] ?>">
+                        <button type="submit" class="order-action-btn danger">
+                            CANCEL ORDER
+                        </button>
+                    </form>
                 </div>
 
             <?php endif; ?>

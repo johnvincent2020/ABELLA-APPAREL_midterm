@@ -39,6 +39,12 @@ if (isset($_POST['login'])) {
             $_SESSION['user_name'] = $user['name'];
             $_SESSION['user_email'] = $user['email'];
             $_SESSION['user_role'] = $user['role'];
+            if (($user['account_status'] ?? 'Active') !== 'Active') {
+                $_SESSION['login_error'] = "Your account is blocked.";
+                $_SESSION['active_form'] = 'login';
+                header("Location: login.php");
+                exit();
+            }
             if ($user['role'] === 'admin') {
                 header(
                     "Location: admin_page.php"

@@ -21,6 +21,31 @@ if ($result) {
     $unreadMessages = (int)($row['total'] ?? 0);
 }
 $search = trim($_GET['search'] ?? '');
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $customerId = (int)($_POST['customer_id'] ?? 0);
+    $customerAction = $_POST['customer_action'] ?? '';
+
+    if ($customerId <= 0) {
+        die('Invalid customer.');
+    }
+
+    if ($customerAction === 'delete') {
+        $stmt = $conn->prepare("DELETE FROM users WHERE id = ? AND role = 'user'");
+        $stmt->bind_param('i', $customerId);
+        $stmt->execute();
+        $stmt->close();
+    } elseif (in_array($customerAction, ['block', 'unblock'], true)) {
+        $accountStatus = $customerAction === 'block' ? 'Blocked' : 'Active';
+        $stmt = $conn->prepare("UPDATE users SET account_status = ? WHERE id = ? AND role = 'user'");
+        $stmt->bind_param('si', $accountStatus, $customerId);
+        $stmt->execute();
+        $stmt->close();
+    }
+
+    header('Location: admin_customers.php' . ($search !== '' ? '?search=' . urlencode($search) : ''));
+    exit();
+}
 if ($search !== '') {
     $safeSearch = $conn->real_escape_string($search);
     $customerQuery = "
@@ -29,6 +54,7 @@ if ($search !== '') {
             u.name,
             u.email,
             u.profile_photo,
+            u.account_status,
             u.created_at,
             COUNT(o.id) AS order_count,
             COALESCE(SUM(o.total_amount), 0) AS total_spent,
@@ -46,6 +72,7 @@ if ($search !== '') {
             u.name,
             u.email,
             u.profile_photo,
+            u.account_status,
             u.created_at
         ORDER BY u.id DESC
     ";
@@ -57,6 +84,7 @@ if ($search !== '') {
             u.email,
             u.created_at,
             u.profile_photo,
+            u.account_status,
             COUNT(o.id) AS order_count,
             COALESCE(SUM(o.total_amount), 0) AS total_spent,
             MAX(o.created_at) AS last_order
@@ -69,6 +97,7 @@ if ($search !== '') {
             u.name,
             u.email,
             u.profile_photo,
+            u.account_status,
             u.created_at
         ORDER BY u.id DESC
     ";
@@ -470,6 +499,26 @@ if ($result) {
             color: #888;
             font-size: 12px;
         }
+        .customer-actions {
+            display: flex;
+            gap: 6px;
+        }
+        .customer-action-btn {
+            padding: 7px 9px;
+            border: 1px solid #555;
+            background: transparent;
+            color: #c49d4c;
+            cursor: pointer;
+            font-size: 10px;
+            font-weight: 700;
+        }
+        .customer-action-btn:hover {
+            border-color: #c49d4c;
+        }
+        .customer-action-btn.delete {
+            color: #e27d7d;
+            border-color: #6b3d3d;
+        }
         .empty-state {
             padding: 50px 20px;
             text-align: center;
@@ -718,6 +767,9 @@ if ($result) {
                             Last Order
                         </th>
                         <th>
+                            Account
+                        </th>
+                        <th>
                             Registered
                         </th>
                     </tr>
@@ -827,6 +879,28 @@ if ($result) {
                                             No orders
                                         <?php endif; ?>
                                     </span>
+                                </td>
+                                <td>
+                                    <div class="customer-actions">
+                                        <?php if (($customer['account_status'] ?? 'Active') === 'Blocked'): ?>
+                                            <form method="POST">
+                                                <input type="hidden" name="customer_id" value="<?= (int)$customer['id'] ?>">
+                                                <input type="hidden" name="customer_action" value="unblock">
+                                                <button type="submit" class="customer-action-btn">UNBLOCK</button>
+                                            </form>
+                                        <?php else: ?>
+                                            <form method="POST">
+                                                <input type="hidden" name="customer_id" value="<?= (int)$customer['id'] ?>">
+                                                <input type="hidden" name="customer_action" value="block">
+                                                <button type="submit" class="customer-action-btn">BLOCK</button>
+                                            </form>
+                                        <?php endif; ?>
+                                        <form method="POST" onsubmit="return confirm('Delete this customer account?');">
+                                            <input type="hidden" name="customer_id" value="<?= (int)$customer['id'] ?>">
+                                            <input type="hidden" name="customer_action" value="delete">
+                                            <button type="submit" class="customer-action-btn delete">DELETE</button>
+                                        </form>
+                                    </div>
                                 </td>
                                 <td>
                                     <span class="date-text">
