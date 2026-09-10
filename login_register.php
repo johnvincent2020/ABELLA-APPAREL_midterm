@@ -12,7 +12,7 @@ if (isset($_POST['register'])) {
     if ($checkEmail->num_rows > 0) {
         $_SESSION['register_error'] = "Email already registered!";
         $_SESSION['active_form'] = 'register';
-        header("Location: index.php");
+        header("Location: login.php");
         exit();
     } else {
         $conn->query(
