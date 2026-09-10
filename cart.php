@@ -51,12 +51,36 @@ if ($isUser && isset($_SESSION['user_id'])) {
 }
 
 
+function cartCurrentCount() {
+    $count = 0;
+
+    if (isset($_SESSION['cart'])) {
+        foreach ($_SESSION['cart'] as $item) {
+            $count += (int)($item['quantity'] ?? 0);
+        }
+    }
+
+    return $count;
+}
+
 if (isset($_POST['add_to_cart'])) {
 
-
-
+    $isAjax = (
+        isset($_SERVER['HTTP_X_REQUESTED_WITH'])
+        && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest'
+    );
 
     if (!$isLoggedIn) {
+
+        if ($isAjax) {
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode([
+                'success' => false,
+                'requires_login' => true,
+                'message' => 'Please log in to add items to your cart.'
+            ]);
+            exit();
+        }
 
         header("Location: login.php");
         exit();
@@ -120,6 +144,15 @@ if (isset($_POST['add_to_cart'])) {
 
     if (!$product) {
 
+        if ($isAjax) {
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode([
+                'success' => false,
+                'message' => 'Product not found.'
+            ]);
+            exit();
+        }
+
         $_SESSION['cart_message'] =
             "Product not found.";
 
@@ -134,6 +167,15 @@ if (isset($_POST['add_to_cart'])) {
 
     if ($stock <= 0) {
 
+        if ($isAjax) {
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode([
+                'success' => false,
+                'message' => $product['name'] . ' is out of stock.'
+            ]);
+            exit();
+        }
+
         $_SESSION['cart_message'] =
             $product['name'] . " is out of stock.";
 
@@ -145,12 +187,23 @@ if (isset($_POST['add_to_cart'])) {
 
     if ($requestedQuantity > $stock) {
 
-        $_SESSION['cart_message'] =
+        $stockMessage =
             "Only "
             . $stock
             . " unit(s) of "
             . $product['name']
             . " are available.";
+
+        if ($isAjax) {
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode([
+                'success' => false,
+                'message' => $stockMessage
+            ]);
+            exit();
+        }
+
+        $_SESSION['cart_message'] = $stockMessage;
 
         header("Location: cart.php");
         exit();
@@ -252,6 +305,34 @@ if (isset($_POST['add_to_cart'])) {
     if ($buyNow) {
 
         header("Location: checkout.php");
+        exit();
+
+    }
+
+
+    if ($isAjax) {
+
+        $addedMessage = $product['name'] . ' added to your cart.';
+
+        if (isset($_SESSION['cart_message'])) {
+
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode([
+                'success' => false,
+                'message' => $_SESSION['cart_message'],
+                'cart_count' => cartCurrentCount()
+            ]);
+            unset($_SESSION['cart_message']);
+            exit();
+
+        }
+
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode([
+            'success' => true,
+            'message' => $addedMessage,
+            'cart_count' => cartCurrentCount()
+        ]);
         exit();
 
     }

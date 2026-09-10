@@ -811,7 +811,7 @@ if ($product) {
                                 <button
                                     type="button"
                                     class="details-add-cart"
-                                    onclick="addToCart()"
+                                    onclick="addToCart(this)"
                                 >
                                     ADD TO CART
                                 </button>
@@ -1148,7 +1148,7 @@ function decreaseQuantity() {
     }
     updateQuantityButtons();
 }
-function addToCart() {
+function addToCart(btn) {
     const quantityInput =
         document.getElementById("quantity");
     if (!quantityInput) {
@@ -1165,30 +1165,108 @@ function addToCart() {
         );
         return;
     }
-    const form =
-    document.createElement("form");
-    form.method = "POST";
-    form.action = "cart.php";
-    const productInput =
-    document.createElement("input");
-    productInput.type = "hidden";
-    productInput.name = "product_id";
-    productInput.value = productId;
-    const cartInput =
-    document.createElement("input");
-    cartInput.type = "hidden";
-    cartInput.name = "add_to_cart";
-    cartInput.value = "1";
-    const quantityInputHidden =
-    document.createElement("input");
-    quantityInputHidden.type = "hidden";
-    quantityInputHidden.name = "quantity";
-    quantityInputHidden.value = quantity;
-    form.appendChild(productInput);
-    form.appendChild(cartInput);
-    form.appendChild(quantityInputHidden);
-    document.body.appendChild(form);
-    form.submit();
+
+    if (btn && btn.disabled) {
+        return;
+    }
+    if (btn) {
+        btn.disabled = true;
+    }
+
+    const formData = new FormData();
+    formData.append("product_id", productId);
+    formData.append("add_to_cart", "1");
+    formData.append("quantity", quantity);
+
+    fetch("cart.php", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "X-Requested-With": "XMLHttpRequest" },
+        body: formData
+    })
+    .then(function (res) { return res.json(); })
+    .then(function (data) {
+        if (data.requires_login) {
+            window.location.href = "login.php";
+            return;
+        }
+        if (data.success) {
+            const img = document.querySelector(".product-details-image img");
+            flyToCart(img);
+            updateCartBadge(data.cart_count);
+        } else {
+            alert(data.message || "Could not add this item to your cart.");
+        }
+    })
+    .catch(function () {
+        alert("Something went wrong. Please try again.");
+    })
+    .finally(function () {
+        if (btn) {
+            btn.disabled = false;
+        }
+    });
+}
+
+function flyToCart(sourceImg) {
+    const cartIcon = document.querySelector(".cart-icon");
+    if (!sourceImg || !cartIcon) {
+        return;
+    }
+
+    const startRect = sourceImg.getBoundingClientRect();
+    const endRect = cartIcon.getBoundingClientRect();
+
+    const flyer = sourceImg.cloneNode(true);
+    flyer.classList.add("fly-to-cart-clone");
+    flyer.style.top = startRect.top + "px";
+    flyer.style.left = startRect.left + "px";
+    flyer.style.width = startRect.width + "px";
+    flyer.style.height = startRect.height + "px";
+    document.body.appendChild(flyer);
+
+    const startCenterX = startRect.left + startRect.width / 2;
+    const startCenterY = startRect.top + startRect.height / 2;
+    const endCenterX = endRect.left + endRect.width / 2;
+    const endCenterY = endRect.top + endRect.height / 2;
+
+    requestAnimationFrame(function () {
+        requestAnimationFrame(function () {
+            const translateX = endCenterX - startCenterX;
+            const translateY = endCenterY - startCenterY;
+            flyer.style.width = "22px";
+            flyer.style.height = "22px";
+            flyer.style.opacity = "0.35";
+            flyer.style.transform =
+                "translate(" + translateX + "px, " + translateY + "px) scale(0.3)";
+        });
+    });
+
+    setTimeout(function () {
+        flyer.remove();
+        cartIcon.classList.add("cart-bump");
+        setTimeout(function () {
+            cartIcon.classList.remove("cart-bump");
+        }, 350);
+    }, 750);
+}
+
+function updateCartBadge(count) {
+    const cartIcon = document.querySelector(".cart-icon");
+    if (!cartIcon) {
+        return;
+    }
+    let badge = cartIcon.querySelector(".cart-count");
+    if (count > 0) {
+        if (!badge) {
+            badge = document.createElement("span");
+            badge.className = "cart-count";
+            cartIcon.appendChild(badge);
+        }
+        badge.textContent = count;
+    } else if (badge) {
+        badge.remove();
+    }
 }
 function buyNow() {
     const quantityInput =

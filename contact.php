@@ -1344,7 +1344,7 @@ if ($isUser && isset($_SESSION['user_id'])) {
                         </h3>
 
                         <p>
-                            +63 9XX XXX XXXX
+                            +63 967 012 2648
                         </p>
 
                     </div>
