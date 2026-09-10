@@ -259,10 +259,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['order_action'])) {
             $cancelStmt = $conn->prepare("
                 UPDATE orders
                 SET cancelled_from_status = status,
+                    cancellation_reason = 'Cancelled by customer',
+                    cancelled_by = 'customer',
                     status = 'Cancelled'
                 WHERE id = ?
                   AND user_id = ?
-                  AND status = 'Processing'
+                  AND status IN ('Pending', 'Processing')
             ");
 
             if (!$cancelStmt) {
@@ -274,7 +276,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['order_action'])) {
 
             if ($cancelStmt->affected_rows !== 1) {
                 $cancelStmt->close();
-                throw new Exception('Only processing orders can be cancelled.');
+                throw new Exception('Only pending or processing orders can be cancelled.');
             }
 
             $cancelStmt->close();
@@ -461,7 +463,11 @@ if (
         $_SESSION['flash_error'] = $flashError;
     }
 
-    header("Location: user_page.php");
+    $orderAnchor = isset($_POST['order_action']) && $orderId > 0
+        ? '#order-' . $orderId
+        : '';
+
+    header("Location: user_page.php" . $orderAnchor);
     exit();
 }
 
@@ -480,7 +486,8 @@ $stmt = $conn->prepare("
         total_amount,
         status,
         created_at,
-        received_at
+        received_at,
+        cancellation_reason
     FROM orders
     WHERE user_id = ?
     ORDER BY created_at DESC
@@ -1069,10 +1076,44 @@ input {
 ===================================================== */
 
 .flash-message {
-    margin-bottom: 25px;
-    padding: 15px 18px;
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    z-index: 1000;
+    width: min(420px, calc(100% - 32px));
+    padding: 22px 48px 22px 22px;
+    transform: translate(-50%, -50%);
     border: 1px solid;
-    font-size: 12px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, .45);
+    font-size: 13px;
+    line-height: 1.6;
+    text-align: center;
+    animation: flashIn .25s ease-out;
+}
+
+.flash-close {
+    position: absolute;
+    top: 8px;
+    right: 14px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: #fff;
+    font-size: 22px;
+    font-weight: 300;
+    line-height: 1;
+    cursor: pointer;
+}
+
+@keyframes flashIn {
+    from {
+        opacity: 0;
+        transform: translate(-50%, -46%);
+    }
+    to {
+        opacity: 1;
+        transform: translate(-50%, -50%);
+    }
 }
 
 .flash-success {
@@ -1179,6 +1220,7 @@ input {
     background: #111;
     border: 1px solid #292929;
     overflow: hidden;
+    scroll-margin-top: 28px;
 }
 
 .order-top {
@@ -1212,6 +1254,18 @@ input {
     color: #c49d4c;
     font-size: 10px;
     letter-spacing: .5px;
+}
+
+.cancellation-notice {
+    padding: 12px 23px;
+    border-bottom: 1px solid #292929;
+    color: #e27d7d;
+    font-size: 11px;
+}
+
+.cancellation-notice strong {
+    margin-right: 5px;
+    color: #fff;
 }
 
 /* =====================================================
@@ -2382,7 +2436,8 @@ input {
 
 <?php if ($flashSuccess !== ''): ?>
 
-    <div class="flash-message flash-success">
+    <div class="flash-message flash-success" role="status">
+        <button type="button" class="flash-close" aria-label="Close notification">&times;</button>
         <?= e($flashSuccess) ?>
     </div>
 
@@ -2390,7 +2445,8 @@ input {
 
 <?php if ($flashError !== ''): ?>
 
-    <div class="flash-message flash-error">
+    <div class="flash-message flash-error" role="alert">
+        <button type="button" class="flash-close" aria-label="Close notification">&times;</button>
         <?= e($flashError) ?>
     </div>
 
@@ -2671,7 +2727,10 @@ input {
 
         ?>
 
-        <article class="order-card">
+        <article
+            class="order-card"
+            id="order-<?= (int) $order['id'] ?>"
+        >
 
             <div class="order-top">
 
@@ -2703,6 +2762,13 @@ input {
                 </div>
 
             </div>
+
+            <?php if (strtolower($order['status']) === 'cancelled' && !empty($order['cancellation_reason'])): ?>
+                <div class="cancellation-notice">
+                    <strong>Cancellation reason:</strong>
+                    <?= e($order['cancellation_reason']) ?>
+                </div>
+            <?php endif; ?>
 
             <div class="order-progress">
 
@@ -3042,7 +3108,7 @@ input {
 
                 </div>
 
-            <?php elseif (strtolower($order['status']) === 'processing'): ?>
+            <?php elseif (in_array(strtolower($order['status']), ['pending', 'processing'], true)): ?>
 
                 <div class="order-actions">
                     <form method="POST" onsubmit="return confirm('Cancel this processing order?');">
@@ -3667,24 +3733,23 @@ function closeReviewModal(event) {
 
 setTimeout(function() {
 
-    const success =
-        document.querySelector('.flash-success');
-
-    if (success) {
-
-        success.style.transition =
-            'opacity .35s ease';
-
-        success.style.opacity = '0';
+    document.querySelectorAll('.flash-message').forEach(function(message) {
+        message.style.transition = 'opacity .35s ease, transform .35s ease';
+        message.style.opacity = '0';
+        message.style.transform = 'translate(-50%, -46%)';
 
         setTimeout(function() {
-
-            success.remove();
-
+            message.remove();
         }, 350);
-    }
+    });
 
-}, 3500);
+}, 4000);
+
+document.querySelectorAll('.flash-close').forEach(function(button) {
+    button.addEventListener('click', function() {
+        button.parentElement.remove();
+    });
+});
 
 </script>
 

@@ -41,9 +41,13 @@ if (
     header('Content-Type: application/json');
 
     $order_id = (int)($_POST['order_id'] ?? 0);
+    $cancellation_reason = trim($_POST['cancellation_reason'] ?? '');
 
-    if ($order_id <= 0) {
-        echo json_encode(['success' => false]);
+    if ($order_id <= 0 || $cancellation_reason === '') {
+        echo json_encode([
+            'success' => false,
+            'message' => 'Please enter a cancellation reason.'
+        ]);
         exit();
     }
 
@@ -51,7 +55,7 @@ if (
 
     try {
         $check_stmt = $conn->prepare(" 
-            SELECT status, cancelled_from_status
+            SELECT status, cancelled_from_status, cancelled_by
             FROM orders
             WHERE id = ?
             FOR UPDATE
@@ -90,6 +94,8 @@ if (
         $update_stmt = $conn->prepare(" 
             UPDATE orders
             SET cancelled_from_status = status,
+                cancellation_reason = ?,
+                cancelled_by = 'admin',
                 status = 'Cancelled'
             WHERE id = ?
               AND status IN ('Pending', 'Processing', 'Shipped')
@@ -99,7 +105,7 @@ if (
             throw new Exception('Unable to cancel the order.');
         }
 
-        $update_stmt->bind_param('i', $order_id);
+        $update_stmt->bind_param('si', $cancellation_reason, $order_id);
         $update_stmt->execute();
 
         if ($update_stmt->affected_rows !== 1) {
@@ -155,7 +161,7 @@ if (
 
     try {
         $check_stmt = $conn->prepare(" 
-            SELECT status, cancelled_from_status
+            SELECT status, cancelled_from_status, cancelled_by
             FROM orders
             WHERE id = ?
             FOR UPDATE
@@ -173,6 +179,10 @@ if (
 
         if (!$order_row || $order_row['status'] !== 'Cancelled') {
             throw new Exception('Only cancelled orders can be restored.');
+        }
+
+        if (($order_row['cancelled_by'] ?? '') !== 'admin') {
+            throw new Exception('Customer-cancelled orders cannot be restored by admin.');
         }
 
         $restore_status = $order_row['cancelled_from_status'] ?? 'Processing';
@@ -223,7 +233,9 @@ if (
 
         $update_stmt = $conn->prepare(" 
             UPDATE orders
-            SET status = ?, cancelled_from_status = NULL
+            SET status = ?, cancelled_from_status = NULL,
+                cancellation_reason = NULL,
+                cancelled_by = NULL
             WHERE id = ?
               AND status = 'Cancelled'
         ");
@@ -386,6 +398,9 @@ $sql = "
         payment_method,
         total_amount,
         status,
+        received_at,
+        cancellation_reason,
+        cancelled_by,
         created_at
     FROM orders
     ORDER BY created_at DESC
@@ -748,6 +763,13 @@ a {
     gap: 8px;
 }
 
+.customer-cancelled-label {
+    color: #888;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .5px;
+}
+
 .undo-order-btn {
     padding: 9px 14px;
     border: 1px solid #315f3b;
@@ -822,6 +844,42 @@ a {
 .cancel-order-btn:hover {
     background: #b85c5c;
     color: #fff;
+}
+
+.cancel-order-btn:disabled {
+    opacity: .45;
+    cursor: not-allowed;
+}
+
+.cancel-order-btn:disabled:hover {
+    background: transparent;
+    color: #e27d7d;
+}
+
+.cancel-reason-input {
+    width: 180px;
+    padding: 9px 10px;
+    border: 1px solid #333;
+    background: #181818;
+    color: #fff;
+    font-size: 12px;
+}
+
+.cancel-reason-input:focus {
+    border-color: #c49d4c;
+    outline: none;
+}
+
+.order-note {
+    padding: 12px 22px;
+    border-bottom: 1px solid #292929;
+    color: #e27d7d;
+    font-size: 12px;
+}
+
+.receipt-status {
+    color: #7edb8a;
+    font-size: 12px;
 }
 
 .customer-section {
@@ -1342,12 +1400,18 @@ a {
                                 <span class="order-status-badge cancelled">
                                     Cancelled
                                 </span>
-                                <form method="POST" class="admin-undo-form">
-                                    <input type="hidden" name="order_id" value="<?= (int)$order['id'] ?>">
-                                    <button type="submit" class="undo-order-btn">
-                                        UNDO CANCEL
-                                    </button>
-                                </form>
+                                <?php if (($order['cancelled_by'] ?? '') === 'admin'): ?>
+                                    <form method="POST" class="admin-undo-form">
+                                        <input type="hidden" name="order_id" value="<?= (int)$order['id'] ?>">
+                                        <button type="submit" class="undo-order-btn">
+                                            UNDO CANCEL
+                                        </button>
+                                    </form>
+                                <?php else: ?>
+                                    <span class="customer-cancelled-label">
+                                        Cancelled by customer
+                                    </span>
+                                <?php endif; ?>
                             </div>
 
                         <?php else: ?>
@@ -1432,10 +1496,21 @@ a {
 
                         </form>
 
-                        <?php if (in_array($order['status'], ['Pending', 'Processing', 'Shipped'], true)): ?>
+                        <?php if ($order['status'] !== 'Cancelled'): ?>
                             <form method="POST" class="admin-cancel-form">
                                 <input type="hidden" name="order_id" value="<?= (int)$order['id'] ?>">
-                                <button type="submit" class="cancel-order-btn">
+                                <input
+                                    type="text"
+                                    name="cancellation_reason"
+                                    class="cancel-reason-input"
+                                    placeholder="Reason for cancellation"
+                                    <?= $order['status'] === 'Delivered' ? 'disabled' : 'required' ?>
+                                >
+                                <button
+                                    type="submit"
+                                    class="cancel-order-btn"
+                                    <?= $order['status'] === 'Delivered' ? 'disabled' : '' ?>
+                                >
                                     CANCEL ORDER
                                 </button>
                             </form>
@@ -1678,6 +1753,24 @@ a {
 
                     </div>
 
+                    <?php if ($order['status'] === 'Cancelled' && !empty($order['cancellation_reason'])): ?>
+                        <div class="order-note">
+                            Cancellation reason:
+                            <?= htmlspecialchars($order['cancellation_reason']) ?>
+                        </div>
+                    <?php endif; ?>
+
+                    <?php if ($order['status'] === 'Delivered'): ?>
+                        <div class="order-note receipt-status">
+                            <?php if (!empty($order['received_at'])): ?>
+                                Received by customer on
+                                <?= date('M d, Y h:i A', strtotime($order['received_at'])) ?>
+                            <?php else: ?>
+                                Delivered, awaiting customer confirmation
+                            <?php endif; ?>
+                        </div>
+                    <?php endif; ?>
+
                 </div>
 
             <?php endforeach; ?>
@@ -1689,6 +1782,17 @@ a {
 </main>
 
 <script>
+history.scrollRestoration = 'manual';
+
+window.addEventListener('load', function () {
+    const savedScrollPosition = sessionStorage.getItem('adminOrdersScrollY');
+
+    if (savedScrollPosition !== null) {
+        sessionStorage.removeItem('adminOrdersScrollY');
+        window.scrollTo(0, parseInt(savedScrollPosition, 10) || 0);
+    }
+});
+
 document.querySelectorAll('.status-form').forEach(function (form) {
     form.addEventListener('submit', async function (event) {
         event.preventDefault();
@@ -1769,11 +1873,13 @@ document.querySelectorAll('.admin-cancel-form').forEach(function (form) {
 
         const button = form.querySelector('button');
         const orderId = form.querySelector('input[name="order_id"]').value;
+        const reasonInput = form.querySelector('input[name="cancellation_reason"]');
         const formData = new FormData();
 
         button.disabled = true;
         formData.append('cancel_order', '1');
         formData.append('order_id', orderId);
+        formData.append('cancellation_reason', reasonInput ? reasonInput.value : '');
 
         try {
             const response = await fetch(window.location.href, {
@@ -1784,6 +1890,7 @@ document.querySelectorAll('.admin-cancel-form').forEach(function (form) {
             const data = await response.json();
 
             if (data.success) {
+                sessionStorage.setItem('adminOrdersScrollY', String(window.scrollY));
                 window.location.reload();
             } else {
                 button.disabled = false;
@@ -1817,6 +1924,7 @@ document.querySelectorAll('.admin-undo-form').forEach(function (form) {
             const data = await response.json();
 
             if (data.success) {
+                sessionStorage.setItem('adminOrdersScrollY', String(window.scrollY));
                 window.location.reload();
             } else {
                 button.disabled = false;
